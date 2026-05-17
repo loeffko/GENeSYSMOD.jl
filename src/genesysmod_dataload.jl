@@ -135,7 +135,9 @@ function read_sets(in_data, Switch, s_infeas, s_dispatch; dispatch_week=nothing)
     Emission = DataFrame(XLSX.gettable(in_data["Sets"],"F";first_row=1))[!,"Emission"]
     Technology = DataFrame(XLSX.gettable(in_data["Sets"],"B";first_row=1))[!,"Technology"]
     Fuel = DataFrame(XLSX.gettable(in_data["Sets"],"D";first_row=1))[!,"Fuel"]
-    Year = DataFrame(XLSX.gettable(in_data["Sets"],"I";first_row=1))[!,"Year"]
+    # sort ascending: the model's intertemporal logic (𝓨[i-1]/𝓨[i+1],
+    # YearlyDifferenceMultiplier) assumes years are in ascending order
+    Year = sort(DataFrame(XLSX.gettable(in_data["Sets"],"I";first_row=1))[!,"Year"])
     Mode_of_operation = DataFrame(XLSX.gettable(in_data["Sets"],"E";first_row=1))[!,"Mode_of_operation"]
     Region_full = DataFrame(XLSX.gettable(in_data["Sets"],"A";first_row=1))[!,"Region"]
     Storage = DataFrame(XLSX.gettable(in_data["Sets"],"C";first_row=1))[!,"Storage"]

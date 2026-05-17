@@ -1,3 +1,5 @@
+using Pkg
+Pkg.develop(path="C:/Users/testbed/Documents/GENeSYS_MOD.jl")
 using GENeSYSMOD
 using Test
 using JuMP

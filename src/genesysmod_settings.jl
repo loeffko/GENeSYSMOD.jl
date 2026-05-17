@@ -1,4 +1,31 @@
 """
+Expand a year-keyed `Dict` of anchor values so it covers every year in `years`.
+Values between anchors are linearly interpolated; years outside the anchor
+range are clamped to the nearest anchor. This lets year-keyed settings work
+with any time resolution (e.g. individual years), not only 5-year steps.
+"""
+function _fill_year_dict(anchors::Dict, years)
+    ks = sort(collect(keys(anchors)))
+    out = Dict{Int,Float64}()
+    for y in years
+        yi = Int(y)
+        if haskey(anchors, yi)
+            out[yi] = anchors[yi]
+        elseif yi <= ks[1]
+            out[yi] = anchors[ks[1]]
+        elseif yi >= ks[end]
+            out[yi] = anchors[ks[end]]
+        else
+            lo = maximum(k for k in ks if k <= yi)
+            hi = minimum(k for k in ks if k >= yi)
+            frac = (yi - lo) / (hi - lo)
+            out[yi] = anchors[lo] + frac * (anchors[hi] - anchors[lo])
+        end
+    end
+    return out
+end
+
+"""
 Internal function used in the run process to set run settings such as dicount rates.
 """
 function genesysmod_settings(Sets, Params, socialdiscountrate)
@@ -39,9 +66,14 @@ function genesysmod_settings(Sets, Params, socialdiscountrate)
     BaseYearSlack[Sets.Fuel] .= 0.035
     BaseYearSlack["Power"] = 0.035
 
-    PhaseOut = Dict(2020=>3, 2025=>3, 2030=>3, 2035=>2.5, 2040=>2.5 ,2045=>2, 2050=>2 ,2055=>1.5, 2060=>1.25)# this is an upper limit for fossil generation based on the previous year - to remove choose large value
+    # Anchor values defined at 5-year steps; interpolated to every modelled year
+    # via _fill_year_dict so the model also runs at finer time resolution.
+    # NOTE: these are per-modelled-step multipliers (relative to the previous
+    # modelled year). They were calibrated for 5-year steps - revisit the
+    # anchor values if running at a different resolution.
+    PhaseOut = _fill_year_dict(Dict(2020=>3.0, 2025=>3.0, 2030=>3.0, 2035=>2.5, 2040=>2.5, 2045=>2.0, 2050=>2.0, 2055=>1.5, 2060=>1.25), Sets.Year)# upper limit for fossil generation based on the previous year - to remove choose large value
 
-    PhaseIn = Dict(2020=>1, 2025=>0.8, 2030=>0.8, 2035=>0.8, 2040=>0.8, 2045=>0.8, 2050=>0.6, 2055=>0.5, 2060=>0.5) # this is a lower bound for renewable integration based on the previous year - to remove choose 0
+    PhaseIn = _fill_year_dict(Dict(2020=>1.0, 2025=>0.8, 2030=>0.8, 2035=>0.8, 2040=>0.8, 2045=>0.8, 2050=>0.6, 2055=>0.5, 2060=>0.5), Sets.Year) # lower bound for renewable integration based on the previous year - to remove choose 0
 
     #StorageLevelYearStartUpperLimit = Switch.set_storagelevelstart_up
     #StorageLevelYearStartLowerLimit = Switch.set_storagelevelstart_down
