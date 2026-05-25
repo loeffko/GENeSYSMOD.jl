@@ -8,3 +8,6 @@ test/TestData/Inputs/*.xlsx
 *.csv
 *.log
 *.mps
+/InputData
+iis.txt
+*.code-workspace
