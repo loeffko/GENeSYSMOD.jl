@@ -135,7 +135,9 @@ function read_sets(in_data, Switch, s_infeas, s_dispatch; dispatch_week=nothing)
     Emission = DataFrame(XLSX.gettable(in_data["Sets"],"F";first_row=1))[!,"Emission"]
     Technology = DataFrame(XLSX.gettable(in_data["Sets"],"B";first_row=1))[!,"Technology"]
     Fuel = DataFrame(XLSX.gettable(in_data["Sets"],"D";first_row=1))[!,"Fuel"]
-    Year = DataFrame(XLSX.gettable(in_data["Sets"],"I";first_row=1))[!,"Year"]
+    # sort ascending: the model's intertemporal logic (𝓨[i-1]/𝓨[i+1],
+    # YearlyDifferenceMultiplier) assumes years are in ascending order
+    Year = sort(DataFrame(XLSX.gettable(in_data["Sets"],"I";first_row=1))[!,"Year"])
     Mode_of_operation = DataFrame(XLSX.gettable(in_data["Sets"],"E";first_row=1))[!,"Mode_of_operation"]
     Region_full = DataFrame(XLSX.gettable(in_data["Sets"],"A";first_row=1))[!,"Region"]
     Storage = DataFrame(XLSX.gettable(in_data["Sets"],"C";first_row=1))[!,"Storage"]
@@ -198,6 +200,23 @@ function read_tags(in_data, Sets, Switch, s_infeas, s_dispatch)
 
     TagTechnologyToSubsets = read_subsets(in_data, "Par_TagTechnologyToSubsets") #TODO handle the tags consistently: now we have lists of technology in one and DAA of tech, subsets and 1. Some parameters seems also redundant.
     TagFuelToSubsets = read_subsets(in_data, "Par_TagFuelToSubsets")
+    # read_subsets only creates a key for subsets that actually appear in the sheet.
+    # Sector-reduced datasets (e.g. power-only North America) drop the heat/transport/
+    # fossil subset rows, leaving those keys absent and crashing the many downstream
+    # `Tag...Subsets["<name>"]` lookups. Ensure every referenced subset key exists,
+    # defaulting missing ones to empty (= "no members in this dataset"). Existing keys
+    # are left untouched, so full-sector datasets are unaffected.
+    for k ∈ ("HeatFuels", "TransportFuels", "GasFuels")
+        haskey(TagFuelToSubsets, k) || (TagFuelToSubsets[k] = String[])
+    end
+    for k ∈ ("Solar", "Wind", "Renewables", "CCS", "Transformation", "FossilFuelGeneration",
+             "FossilPower", "CHP", "Transport", "ImportTechnology", "PowerSupply",
+             "PowerBiomass", "Coal", "Gas", "Biomass", "Hydro", "Households",
+             "EmergingTechnologies", "PhaseInSet", "PhaseOutSet", "StorageDummies",
+             "DummyTechnology", "TradeStorageDummies", "SectorCoupling", "Convert",
+             "HeatSlowRamper", "HeatQuickRamper")
+        haskey(TagTechnologyToSubsets, k) || (TagTechnologyToSubsets[k] = String[])
+    end
     TagDemandFuelToSector = create_daa(in_data, "Par_TagDemandFuelToSector", 𝓕, 𝓢𝓮)
     TagElectricTechnology = create_daa(in_data, "Par_TagElectricTechnology", 𝓣)
     TagTechnologyToModalType = create_daa(in_data, "Par_TagTechnologyToModalType", 𝓣, 𝓜, 𝓜𝓽)

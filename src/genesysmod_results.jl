@@ -72,14 +72,19 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
     end
 
     z_fuelcosts = JuMP.Containers.DenseAxisArray(zeros(length(Sets.Fuel),length(Sets.Year),length(Sets.Region_full)), Sets.Fuel, Sets.Year, Sets.Region_full)
+    # Each entry maps a (fossil) fuel to its import/resource technology cost. Sector-reduced
+    # datasets (power-only North America) drop these fuels and techs, so guard every lookup
+    # — both the z_fuelcosts fuel axis and the source technology must exist.
     for y ∈ Sets.Year for r ∈ Sets.Region_full
-        z_fuelcosts["Hardcoal",y,r] = Params.VariableCost[r,"Z_Import_Hardcoal",1,y]
-        z_fuelcosts["Lignite",y,r] = Params.VariableCost[r,"R_Coal_Lignite",1,y]
-        z_fuelcosts["Nuclear",y,r] = Params.VariableCost[r,"R_Nuclear",1,y]
-        z_fuelcosts["Biomass",y,r] = sum(Params.VariableCost[r,f,1,y] for f ∈ Params.Tags.TagTechnologyToSubsets["Biomass"])/length(Params.Tags.TagTechnologyToSubsets["Biomass"])
-        z_fuelcosts["Gas_Natural",y,r] = Params.VariableCost[r,"Z_Import_Gas",1,y]
-        z_fuelcosts["Oil",y,r] = Params.VariableCost[r,"Z_Import_Oil",1,y]
-        z_fuelcosts["H2",y,r] = Params.VariableCost[r,"Z_Import_H2",1,y]
+        "Hardcoal" ∈ Sets.Fuel && "Z_Import_Hardcoal" ∈ Sets.Technology && (z_fuelcosts["Hardcoal",y,r] = Params.VariableCost[r,"Z_Import_Hardcoal",1,y])
+        "Lignite" ∈ Sets.Fuel && "R_Coal_Lignite" ∈ Sets.Technology && (z_fuelcosts["Lignite",y,r] = Params.VariableCost[r,"R_Coal_Lignite",1,y])
+        "Nuclear" ∈ Sets.Fuel && "R_Nuclear" ∈ Sets.Technology && (z_fuelcosts["Nuclear",y,r] = Params.VariableCost[r,"R_Nuclear",1,y])
+        if "Biomass" ∈ Sets.Fuel && !isempty(Params.Tags.TagTechnologyToSubsets["Biomass"])
+            z_fuelcosts["Biomass",y,r] = sum(Params.VariableCost[r,f,1,y] for f ∈ Params.Tags.TagTechnologyToSubsets["Biomass"])/length(Params.Tags.TagTechnologyToSubsets["Biomass"])
+        end
+        "Gas_Natural" ∈ Sets.Fuel && "Z_Import_Gas" ∈ Sets.Technology && (z_fuelcosts["Gas_Natural",y,r] = Params.VariableCost[r,"Z_Import_Gas",1,y])
+        "Oil" ∈ Sets.Fuel && "Z_Import_Oil" ∈ Sets.Technology && (z_fuelcosts["Oil",y,r] = Params.VariableCost[r,"Z_Import_Oil",1,y])
+        "H2" ∈ Sets.Fuel && "Z_Import_H2" ∈ Sets.Technology && (z_fuelcosts["H2",y,r] = Params.VariableCost[r,"Z_Import_H2",1,y])
     end end
 
     if Switch.switch_LCOE_calc == 1
@@ -235,7 +240,9 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
     df_residual_capacity[!,:Type] .= "ResidualCapacity"
     df_residual_capacity[!,:PathwayScenario] .= "$(Switch.emissionPathway)_$(Switch.emissionScenario)"
 
-    df_total_capacity = convert_jump_container_to_df(value.(Vars.TotalCapacityAnnual[:,tmp_techs,:]);dim_names=[:Year, :Technology, :Region])
+    # Use all technologies (a leftover `tmp_techs` from an earlier loop slipped in here);
+    # the per-sector subsetting happens below via in.(df_total_capacity.Technology, tmp_techs).
+    df_total_capacity = convert_jump_container_to_df(value.(Vars.TotalCapacityAnnual[:,:,:]);dim_names=[:Year, :Technology, :Region])
     df_total_capacity[!,:Type] .= "TotalCapacity"
     df_total_capacity[!,:PathwayScenario] .= "$(Switch.emissionPathway)_$(Switch.emissionScenario)"
 
@@ -577,7 +584,9 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
         end
     end
 
-    FinalEnergy = [
+    # Restrict to fuels present in this dataset (power-only North America keeps only a subset),
+    # otherwise the VarPar.UseAnnual[y,x,r] lookups below KeyError on dropped fuels.
+    FinalEnergy = intersect([
     "Power",
     "Biomass",
     "Hardcoal",
@@ -585,7 +594,7 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
     "H2",
     "Gas_Natural",
     "Oil",
-    "Nuclear"]
+    "Nuclear"], Sets.Fuel)
 
     notEU27 = [
     "World",
@@ -597,12 +606,14 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
 
     EU27 = setdiff(Sets.Region_full, notEU27)
 
-    FinalDemandSector =[
+    # Restrict to sectors present in this dataset; TagTechnologyToSector is indexed over
+    # Sets.Sector, so a dropped sector (power-only North America) would KeyError below.
+    FinalDemandSector = intersect([
         "Power",
         "Transportation",
         "Industry",
         "Buildings",
-        "CHP"]
+        "CHP"], Sets.Sector)
 
     colnames = [:Type, :Region, :Dim1, :Dim2, :Year, :Value]
     output_other = DataFrame([name => [] for name in colnames])

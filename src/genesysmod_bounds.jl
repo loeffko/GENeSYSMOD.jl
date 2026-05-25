@@ -47,12 +47,14 @@ function genesysmod_bounds(model,Sets,Params, Vars,Settings,Switch,Maps)
             end
     end end
 
-    for r ∈ Sets.Region_full
-        for rr ∈ Sets.Region_full
-            for y ∈ Sets.Year
-                if Params.TradeCosts[r,"ETS",y,rr] == 0
-                    Params.TradeCosts[r,"ETS",y,rr] = 0.01
-    end end end end
+    if "ETS" ∈ Sets.Fuel  # ETS commodity is absent from sector-reduced (power-only) datasets
+        for r ∈ Sets.Region_full
+            for rr ∈ Sets.Region_full
+                for y ∈ Sets.Year
+                    if Params.TradeCosts[r,"ETS",y,rr] == 0
+                        Params.TradeCosts[r,"ETS",y,rr] = 0.01
+        end end end end
+    end
 
     for r ∈ Sets.Region_full for m ∈ Sets.Mode_of_operation for y ∈ Sets.Year
         for t ∈ Sets.Technology
@@ -261,8 +263,10 @@ function genesysmod_bounds(model,Sets,Params, Vars,Settings,Switch,Maps)
             end
         end end
 
-        Params.TotalAnnualMaxCapacity[Sets.Region_full,"A_Air",:] .= 99999
-        Params.TotalTechnologyAnnualActivityUpperLimit[Sets.Region_full,"A_Air",:] .= 99999
+        if "A_Air" ∈ Sets.Technology  # A_Air (atmospheric CO2 carrier) is absent from power-only datasets
+            Params.TotalAnnualMaxCapacity[Sets.Region_full,"A_Air",:] .= 99999
+            Params.TotalTechnologyAnnualActivityUpperLimit[Sets.Region_full,"A_Air",:] .= 99999
+        end
 
         for t ∈ intersect(Sets.Technology, ["X_DAC_HT","X_DAC_LT"])
             Params.EmissionActivityRatio[Sets.Region_full,t,:,:,:] .= -1

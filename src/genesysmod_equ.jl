@@ -212,32 +212,18 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
   #TagTimeIndependentFuel = JuMP.Containers.DenseAxisArray(zeros(length(𝓨), length(𝓕), length(𝓡)), 𝓨, 𝓕, 𝓡)
   TagTimeIndependentFuel = CanFuelBeUsedOrDemanded.*(1 .- CanFuelBeProduced)
   Info = "reduced"
+  # Only tag fuels that exist in this dataset; sector-reduced (power-only) datasets
+  # drop most of these fuels, which would otherwise KeyError on the axis lookup.
   if Info == "reduced"
-    TagTimeIndependentFuel[:,"Lignite",:] .= 1
-    TagTimeIndependentFuel[:,"Biomass",:] .= 1
-    TagTimeIndependentFuel[:,"Area_Rooftop_Residential",:] .= 1
-    TagTimeIndependentFuel[:,"Area_Rooftop_Commercial",:] .= 1
-    TagTimeIndependentFuel[:,"Hardcoal",:] .= 1
-    TagTimeIndependentFuel[:,"Nuclear",:] .= 1
-    TagTimeIndependentFuel[:,"Oil",:] .= 1
-    TagTimeIndependentFuel[:,"Air",:] .= 1
-    TagTimeIndependentFuel[:,"DAC_Dummy",:] .= 1
-    TagTimeIndependentFuel[:,"ETS",:] .= 1
-    TagTimeIndependentFuel[:,"ETS_Source",:] .= 1
+    for f ∈ intersect(["Lignite","Biomass","Area_Rooftop_Residential","Area_Rooftop_Commercial",
+                       "Hardcoal","Nuclear","Oil","Air","DAC_Dummy","ETS","ETS_Source"], 𝓕)
+      TagTimeIndependentFuel[:,f,:] .= 1
+    end
   elseif Info == "reduced2"
-    TagTimeIndependentFuel[:,"Lignite",:] .= 1
-    TagTimeIndependentFuel[:,"Biomass",:] .= 1
-    TagTimeIndependentFuel[:,"Area_Rooftop_Residential",:] .= 1
-    TagTimeIndependentFuel[:,"Area_Rooftop_Commercial",:] .= 1
-    TagTimeIndependentFuel[:,"Hardcoal",:] .= 1
-    TagTimeIndependentFuel[:,"Nuclear",:] .= 1
-    TagTimeIndependentFuel[:,"Oil",:] .= 1
-    TagTimeIndependentFuel[:,"Air",:] .= 1
-    TagTimeIndependentFuel[:,"DAC_Dummy",:] .= 1
-    TagTimeIndependentFuel[:,"ETS",:] .= 1
-    TagTimeIndependentFuel[:,"ETS_Source",:] .= 1
-    TagTimeIndependentFuel[:,"LNG",:] .= 1
-    TagTimeIndependentFuel[:,"LBG",:] .= 1
+    for f ∈ intersect(["Lignite","Biomass","Area_Rooftop_Residential","Area_Rooftop_Commercial",
+                       "Hardcoal","Nuclear","Oil","Air","DAC_Dummy","ETS","ETS_Source","LNG","LBG"], 𝓕)
+      TagTimeIndependentFuel[:,f,:] .= 1
+    end
   end
 
   IgnoreFuel = JuMP.Containers.DenseAxisArray(zeros(length(𝓨), length(𝓕), length(𝓡)), 𝓨, 𝓕, 𝓡)
@@ -488,6 +474,8 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
     end
 
     ### Trade Capacities for H2 and Natural Gas, when initially no capacities existed, so that the model has the ability to build additional capacities
+    # POWER-ONLY (US): non-power (Gas/H2) initial trade-capacity limits disabled.
+    #=
     if i > 1
       for (r,rr) ∈ get(pairs_by_fuel, "Gas_Natural", Tuple{String,String}[])
         @constraint(model, (Params.TradeCapacity[r,rr,"Gas_Natural",𝓨[i]] == 0 ? 100 : 0)+(Params.GrowthRateTradeCapacity[r,rr,"Gas_Natural",𝓨[i]]*YearlyDifferenceMultiplier(𝓨[i],Sets))*Vars.TotalTradeCapacity[𝓨[i-1],"Gas_Natural",r,rr] >= Vars.NewTradeCapacity[𝓨[i],"Gas_Natural",r,rr],
@@ -497,20 +485,27 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
         @constraint(model, (Params.TradeCapacity[r,rr,"H2",𝓨[i]] == 0 ? 50 : 0)+(Params.GrowthRateTradeCapacity[r,rr,"H2",𝓨[i]]*YearlyDifferenceMultiplier(𝓨[i],Sets))*Vars.TotalTradeCapacity[𝓨[i-1],"H2",r,rr] >= Vars.NewTradeCapacity[𝓨[i],"H2",r,rr],
         base_name="TrC5a_NewTradeCapacityLimitH2|$(𝓨[i])|H2|$(r)|$(rr)")
       end
+    else
+      # first modelled year: cap new trade capacity where none existed.
+      # only build at i == 1, otherwise these (𝓨[1]) rows duplicate every year.
+      for (r,rr) ∈ get(pairs_by_fuel, "Gas_Natural", Tuple{String,String}[])
+          @constraint(model, (Params.TradeCapacity[r,rr,"Gas_Natural",𝓨[1]] == 0 ? 100 : 0) >= Vars.NewTradeCapacity[𝓨[1],"Gas_Natural",r,rr],
+          base_name="TrC4a_NewTradeCapacityLimitNatGas|$(𝓨[1])|Gas_Natural|$(r)|$(rr)")
+      end
+      for (r,rr) ∈ get(pairs_by_fuel, "H2", Tuple{String,String}[])
+          @constraint(model, (Params.TradeCapacity[r,rr,"H2",𝓨[1]] == 0 ? 50 : 0) >= Vars.NewTradeCapacity[𝓨[1],"H2",r,rr],
+          base_name="TrC5a_NewTradeCapacityLimitH2|$(𝓨[1])|H2|$(r)|$(rr)")
+      end
     end
-    for (r,rr) ∈ get(pairs_by_fuel, "Gas_Natural", Tuple{String,String}[])
-        @constraint(model, (Params.TradeCapacity[r,rr,"Gas_Natural",𝓨[1]] == 0 ? 100 : 0) >= Vars.NewTradeCapacity[𝓨[1],"Gas_Natural",r,rr],
-        base_name="TrC4a_NewTradeCapacityLimitNatGas|$(𝓨[1])|Gas_Natural|$(r)|$(rr)")
-    end
-    for (r,rr) ∈ get(pairs_by_fuel, "H2", Tuple{String,String}[])
-        @constraint(model, (Params.TradeCapacity[r,rr,"H2",𝓨[1]] == 0 ? 50 : 0) >= Vars.NewTradeCapacity[𝓨[1],"H2",r,rr],
-        base_name="TrC5a_NewTradeCapacityLimitH2|$(𝓨[1])|H2|$(r)|$(rr)")
-    end
+    =#
     for (f,r,rr) ∈ Maps.Set_Fuel_Regions
+      # POWER-ONLY (US): TrC7 non-power trade-capacity limit disabled (TrC6 power symmetry kept).
+      #=
       if Params.TradeCapacityGrowthCosts[r,rr,f] > 0 && f != "Power"
         @constraint(model, sum(Vars.Import[𝓨[i],l,f,rr,r] for l ∈ 𝓛) <= Vars.TotalTradeCapacity[𝓨[i],f,r,rr],
         base_name="TrC7_TradeCapacityLimitNonPower$(𝓨[i])|$(f)|$(r)|$(rr)")
       end
+      =#
       if Params.TradeRoute[r,rr,"Power",𝓨[i]] > 0 && f == "Power"
         @constraint(model, Vars.NewTradeCapacity[𝓨[i],"Power",r,rr] >= Vars.NewTradeCapacity[𝓨[i],"Power",rr,r] * Switch.set_symmetric_transmission,
         base_name="TrC6_SymmetricalTransmissionExpansion|$(𝓨[i])|$(r)|$(rr)")
@@ -534,11 +529,28 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
 
 
   ############## Pipeline-specific Capacity Accounting #############
-  set_regions = [(y,z) for (x,y,z) ∈ Maps.Set_Fuel_Regions if x in intersect(𝓕,Params.Tags.TagFuelToSubsets["GasFuels"])]
+  # POWER-ONLY (US): all H2/LH2/Gas pipeline trade accounting + flat Gas/H2 import
+  # restrictions disabled — they reference non-power fuels (H2, LH2, GasFuels) and the
+  # Z_Import_Gas / Z_Import_H2 techs, all removed from the NorthAmerica set-filter.
+  #=
+  # H2 / LH2 dedicated trade-capacity limits (GAMS TrPl1aa, TrPl1aaa)
+  for y ∈ 𝓨 for l ∈ 𝓛 for (f,r,rr) ∈ Maps.Set_Fuel_Regions
+    if f == "H2"
+      @constraint(model, Vars.Import[y,l,"H2",rr,r] <= Vars.TotalTradeCapacity[y,"H2",r,rr]*Params.YearSplit[l,y],
+      base_name="TrPl1aa_TradeCapacityPipelinesLines|$(y)|$(l)|$(r)|$(rr)")
+    elseif f == "LH2"
+      @constraint(model, Vars.Import[y,l,"LH2",rr,r] <= Vars.TotalTradeCapacity[y,"LH2",r,rr]*Params.YearSplit[l,y],
+      base_name="TrPl1aaa_TradeCapacityTrucks|$(y)|$(l)|$(r)|$(rr)")
+    end
+  end end end
+
+  # one (r,rr) per gas-trade pair: Set_Fuel_Regions has a triple per gas fuel,
+  # so dropping the fuel repeats each pair -> unique() avoids duplicate TrPA1* rows.
+  set_regions = unique([(y,z) for (x,y,z) ∈ Maps.Set_Fuel_Regions if x in intersect(𝓕,Params.Tags.TagFuelToSubsets["GasFuels"])])
   for y ∈ 𝓨 for l ∈ 𝓛 for (r,rr) ∈ set_regions
     fuels= [x for (x,y,z) ∈ Maps.Set_Fuel_Regions if (y == r) && (z == rr) && (x in intersect(𝓕,Params.Tags.TagFuelToSubsets["GasFuels"]))]
     if Switch.switch_hydrogen_blending_share == 0
-        @constraint(model, sum(Vars.Import[y,l,f,rr,r] for f ∈ setdiff(fuels,["H2"])) <= Vars.TotalTradeCapacity[y,"Gas_Natural",r,rr]*Params.YearSplit[l,y],
+        @constraint(model, sum(Vars.Import[y,l,f,rr,r] for f ∈ setdiff(fuels,["H2_Blend"])) <= Vars.TotalTradeCapacity[y,"Gas_Natural",r,rr]*Params.YearSplit[l,y],
         base_name="TrPA1a_TradeCapacityPipelineAccounting|$(y)|$(l)|$(r)|$(rr)")
 
     elseif (Switch.switch_hydrogen_blending_share < 1) && (Switch.switch_hydrogen_blending_share > 0)
@@ -546,7 +558,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
         @constraint(model, sum(Vars.Import[y,l,f,rr,r] for f ∈ fuels if f != "H2_Blend") + Vars.Import[y,l,"H2_Blend",rr,r]*(11.4/3.0) <= Vars.TotalTradeCapacity[y,"Gas_Natural",r,rr]*Params.YearSplit[l,y],
         base_name="TrPA1b_TradeCapacityPipelineAccountingGasFuels|$(y)|$(l)|$(r)|$(rr)")
         @constraint(model, Vars.Import[y,l,"H2_Blend",rr,r] <= (dedicated_h2/((1-dedicated_h2)*(11.4/3.0))) * sum(Vars.Import[y,l,f,rr,r] for f ∈ fuels if f != "H2_Blend"),
-        base_name="TrPl1c_TradeCapacityPipelinesLines|$(y)|$(l)|$(r)|$(rr)")
+        base_name="TrPA1c_TradeCapacityPipelineAccountingH2Blend|$(y)|$(l)|$(r)|$(rr)")
     elseif Switch.switch_hydrogen_blending_share == 1
         @constraint(model, sum(Vars.Import[y,l,f,rr,r] for f ∈ fuels if f != "H2_Blend") + Vars.Import[y,l,"H2_Blend",rr,r]*(11.4/3.0) <= Vars.TotalTradeCapacity[y,"Gas_Natural",r,rr]*Params.YearSplit[l,y],
         base_name="TrPA1d_TradeCapacityPipelineAccountingCombined|$(y)|$(l)|$(r)|$(rr)")
@@ -561,6 +573,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
     @constraint(model, Vars.RateOfActivity[y,l,"Z_Import_Gas",1,r] <= sum(Vars.RateOfActivity[y,ll,"Z_Import_Gas",1,r] for ll ∈ 𝓛)*Params.YearSplit[l,y]*1.05,
     base_name= "TrPA2b_FlatGasImports|$(y)|$(l)|$(r)")
   end end end
+  =#
   ############### Trading Costs #############
 
   for y ∈ 𝓨 for r ∈ 𝓡
@@ -655,7 +668,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
                 end
               end
             end
-            for f ∈ [y for (x,y) ∈ Maps.Set_Tech_FuelOut]
+            for f ∈ unique([y for (x,y) ∈ Maps.Set_Tech_FuelOut])
               techs=[x for (x,y) ∈ Maps.Set_Tech_FuelOut if y == f]
               if Params.ProductionGrowthLimit[f,𝓨[i]]>0
                 if f ∉ Params.Tags.TagFuelToSubsets["TransportFuels"]
@@ -664,11 +677,17 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
                     YearlyDifferenceMultiplier(𝓨[i-1],Sets)*Params.ProductionGrowthLimit[f,𝓨[i]]*sum(Vars.ProductionByTechnologyAnnual[𝓨[i-1],t,f,r] for t ∈ techs)-sum(Vars.ProductionByTechnologyAnnual[𝓨[i-1],t,f,r] for t ∈ intersect(techs,Params.Tags.TagTechnologyToSubsets["StorageDummies"])),
                     base_name="SC4a_RelativeTechnologyPhaseInLimit|$(𝓨[i])|$(r)|$(f)")
                 elseif 𝓨[i] > 2025
+                    # GAMS guards SC4b with TagModalTypeToModalGroups(mt,'TransportModes'):
+                    # only the parent transport modaltypes, NOT the RE/CONV subgroups.
+                    # Without this, the limit also caps RE-subgroup (e.g. MT_PSNG_ROAD_RE)
+                    # growth, throttling BEV/H2 and forcing PHEV.
                     for mt ∈ 𝓜𝓽
+                      if Params.Tags.TagModalTypeToModalGroups[mt,"TransportModes"] == 1
                         @constraint(model,
                         sum(Vars.ProductionByTechnologyAnnual[𝓨[i],t,f,r]-Vars.ProductionByTechnologyAnnual[𝓨[i-1],t,f,r] for t ∈ techs if (Params.Tags.RETagTechnology[r,t,𝓨[i]] == 1) && (Params.Tags.TagTechnologyToModalType[t,1,mt] == 1)) <=
                         YearlyDifferenceMultiplier(𝓨[i-1],Sets)*Params.ProductionGrowthLimit[f,𝓨[i]]*sum(Vars.ProductionByTechnologyAnnual[𝓨[i-1],t,f,r] for t ∈ techs if Params.Tags.TagTechnologyToModalType[t,1,mt] == 1),
                         base_name="SC4b_RelativeTechnologyPhaseInLimit_Transport|$(𝓨[i])|$(r)|$(f)|$(mt)")
+                      end
                     end
                 end
                 @constraint(model,
@@ -682,14 +701,19 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
     end
 
     ############## CCS-specific constraints #############
-    if Switch.switch_ccs == 1
+    # Skip when the dataset has no CCS technologies (e.g. power-only North America).
+    if Switch.switch_ccs == 1 && !isempty(intersect(𝓣, Params.Tags.TagTechnologyToSubsets["CCS"]))
       for r ∈ 𝓡
+        # CCS1 caps the annual CCS addition rate via the "Air" growth limit; that fuel is
+        # absent in sector-reduced datasets (power-only North America), so skip CCS1 there.
+        if "Air" ∈ 𝓕
         for i ∈ 2:length(𝓨) for f ∈ setdiff(𝓕,["DAC_Dummy"])
           techs=[x for (x,y) ∈ Maps.Set_Tech_FuelOut if y == f]
           @constraint(model,
           sum(Vars.ProductionByTechnologyAnnual[𝓨[i],t,f,r]-Vars.ProductionByTechnologyAnnual[𝓨[i-1],t,f,r] for t ∈ intersect(techs,Params.Tags.TagTechnologyToSubsets["CCS"])) <= YearlyDifferenceMultiplier(𝓨[i-1],Sets)*(Params.ProductionGrowthLimit["Air",𝓨[i]])*sum(Vars.ProductionByTechnologyAnnual[𝓨[i-1],t,f,r] for t ∈ techs),
           base_name="CCS1_CCSAdditionLimit|$(𝓨[i])|$(r)|$(f)")
         end end
+        end
 
         if sum(Params.RegionalCCSLimit[r] for r ∈ 𝓡)>0
           @constraint(model,
@@ -1102,6 +1126,11 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
   print("Cstr: Storage 1 : ",Dates.now()-start,"\n")
 
   ######### Transportation Equations #############
+  # POWER-ONLY (US): transport equations disabled. Mobility fuels + transport techs are
+  # removed from the NorthAmerica set-filter, so T1/T2/T3 and the ProductionSplitByModalType
+  # fixes below reference fuels/modaltypes that no longer exist. Re-enable this whole block
+  # when transport is reintroduced.
+  #=
   start=Dates.now()
   if Switch.switch_dispatch isa TwoNodes
     for y ∈ 𝓨
@@ -1188,6 +1217,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
   end
 
   print("Cstr: transport: ",Dates.now()-start,"\n")
+  =#
   if Switch.switch_ramping == 1
 
     ############### Ramping #############

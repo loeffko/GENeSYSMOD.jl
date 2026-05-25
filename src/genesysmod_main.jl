@@ -15,7 +15,7 @@ function genesysmod_build_model(;elmod_daystep, elmod_hourstep, solver=nothing, 
     switch_peaking_with_storages = 1, switch_peaking_with_trade = 1,switch_peaking_minrun = 0,
     switch_employment_calculation = 0, switch_endogenous_employment = 0,
     employment_data_file = "", elmod_nthhour = 0, elmod_starthour = 8,
-    elmod_dunkelflaute = 0, switch_raw_results = NoRawResult(), switch_processed_results = 0, write_reduced_timeserie = 1, switch_LCOE_calc=0,
+    elmod_dunkelflaute = 0, switch_raw_results = NoRawResult(), switch_processed_results = 0, write_reduced_timeserie = 1, load_reduced_timeserie = 0, switch_LCOE_calc=0,
     switch_reserve=0,switch_base_year_bounds_debugging=0,
     extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1)
 
@@ -85,6 +85,7 @@ function genesysmod_build_model(;elmod_daystep, elmod_hourstep, solver=nothing, 
     switch_raw_results,
     switch_processed_results,
     write_reduced_timeserie,
+    load_reduced_timeserie,
     switch_LCOE_calc,
     extr_str_results,
     extr_str_dispatch,
@@ -162,7 +163,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     switch_peaking_with_storages = 1, switch_peaking_with_trade = 1,switch_peaking_minrun = 0,
     switch_employment_calculation = 0, switch_endogenous_employment = 0,
     employment_data_file = "", elmod_nthhour = 0, elmod_starthour = 8,
-    elmod_dunkelflaute = 0, switch_raw_results = NoRawResult(), switch_processed_results = 0, write_reduced_timeserie = 1, switch_LCOE_calc=0,
+    elmod_dunkelflaute = 0, switch_raw_results = NoRawResult(), switch_processed_results = 0, write_reduced_timeserie = 1, load_reduced_timeserie = 0, switch_LCOE_calc=0,
     switch_reserve=0,switch_base_year_bounds_debugging=0,
     extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1, solver_log=true, solver_attr=Dict())
 
@@ -190,7 +191,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     switch_endogenous_employment = switch_endogenous_employment,
     employment_data_file = employment_data_file, elmod_nthhour = elmod_nthhour, elmod_starthour = elmod_starthour,
     elmod_dunkelflaute = elmod_dunkelflaute, switch_raw_results = switch_raw_results,
-    switch_processed_results = switch_processed_results, write_reduced_timeserie = write_reduced_timeserie,
+    switch_processed_results = switch_processed_results, write_reduced_timeserie = write_reduced_timeserie, load_reduced_timeserie = load_reduced_timeserie,
     switch_LCOE_calc=switch_LCOE_calc,
     switch_reserve=switch_reserve,
     extr_str_results = extr_str_results, extr_str_dispatch=extr_str_dispatch,
@@ -215,6 +216,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         set_optimizer_attribute(model, "Method", 2)
         set_optimizer_attribute(model, "BarHomogeneous", 1)
         set_optimizer_attribute(model, "Crossover", 0)
+        set_optimizer_attribute(model, "GURO_PAR_DUMP", 1)
         if solver_log
             set_optimizer_attribute(model, "LogFile", joinpath(resultdir,"Run_$(elmod_nthhour)_$(today()).log"))
         end
@@ -229,7 +231,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     elseif solver_name(model) == "HiGHS"
         set_optimizer_attribute(model, "solver", "ipm")
         #set_optimizer_attribute(model, "solver", "pdlp")
-        set_optimizer_attribute(model, "run_crossover", "off")
+        set_optimizer_attribute(model, "run_crossover", "on")
         if solver_log
             set_optimizer_attribute(model, "log_file", joinpath(resultdir,"Run_$(elmod_nthhour)_$(today()).log"))
         end
@@ -262,7 +264,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
                 println("Termination status:", termination_status(model), ". Computing IIS")
                 compute_conflict!(model)
                 println("Saving IIS to file")
-                print_iis(model)
+                print_iis(model; filename=joinpath(resultdir,"IIS_$(elmod_nthhour)_$(today())"))
             elseif occursin("HiGHS",string(solver))
                 println("Termination status:", termination_status(model), ". Printing violations:")
                 res = violations(model)
