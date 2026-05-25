@@ -216,7 +216,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         set_optimizer_attribute(model, "Method", 2)
         set_optimizer_attribute(model, "BarHomogeneous", 1)
         set_optimizer_attribute(model, "Crossover", 0)
-        set_optimizer_attribute(model, "GURO_PAR_DUMP", 1)
+        #set_optimizer_attribute(model, "GURO_PAR_DUMP", 1)
         if solver_log
             set_optimizer_attribute(model, "LogFile", joinpath(resultdir,"Run_$(elmod_nthhour)_$(today()).log"))
         end
@@ -231,7 +231,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     elseif solver_name(model) == "HiGHS"
         set_optimizer_attribute(model, "solver", "ipm")
         #set_optimizer_attribute(model, "solver", "pdlp")
-        set_optimizer_attribute(model, "run_crossover", "on")
+        set_optimizer_attribute(model, "run_crossover", "off")
         if solver_log
             set_optimizer_attribute(model, "log_file", joinpath(resultdir,"Run_$(elmod_nthhour)_$(today()).log"))
         end
