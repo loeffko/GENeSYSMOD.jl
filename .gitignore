@@ -11,3 +11,7 @@ test/TestData/Inputs/*.xlsx
 /InputData
 iis.txt
 *.code-workspace
+*.out
+*.attr
+*.prm
+*.lock
