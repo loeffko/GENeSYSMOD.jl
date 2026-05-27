@@ -275,7 +275,7 @@ function update_inftechs_params!(Params, Sets, s_infeas::WithInfeasibilityTechs,
     Params.CapacityFactor[:,Params.Tags.TagTechnologyToSubsets["DummyTechnology"],:,:] .= 1
     Params.OperationalLife[Params.Tags.TagTechnologyToSubsets["DummyTechnology"]] .= 1
     Params.EmissionActivityRatio[:,Params.Tags.TagTechnologyToSubsets["DummyTechnology"],:,:,:] .= 0
-    Params.AnnualMaxNewCapacity[:,Params.Tags.TagTechnologyToSubsets["DummyTechnology"],:] .= 99999
+    Params.AnnualMaxNewCapacity[:,Params.Tags.TagTechnologyToSubsets["DummyTechnology"],:] .= 999999
 
     Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Passenger",1,"MT_PSNG_ROAD"] .= 1
     Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Passenger",1,"MT_PSNG_RAIL"] .= 1
@@ -301,7 +301,7 @@ function update_inftechs_params!(Params, Sets, s_infeas::WithInfeasibilityTechs,
             Params.TechnologyFromStorage["D_Trade_Storage_$f", "S_Trade_Storage_$f", 2, :] .= 1.0
             Params.OperationalLifeStorage["S_Trade_Storage_$f"] .= 100
             Params.OperationalLife["D_Trade_Storage_$f"] .= 100
-            Params.AnnualMaxNewCapacity[:,"D_Trade_Storage_$f",:] .= 99999
+            Params.AnnualMaxNewCapacity[:,"D_Trade_Storage_$f",:] .= 999999
         else
             Params.OutputActivityRatio[:,"D_Trade_Storage_$f",f,2,:] .= 1
             Params.InputActivityRatio[:,"D_Trade_Storage_$f",f,1,:] .= 1

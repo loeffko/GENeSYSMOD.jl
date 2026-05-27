@@ -242,8 +242,8 @@ function genesysmod_bounds(model,Sets,Params, Vars,Settings,Switch,Maps)
     if Switch.switch_ccs == 1
         for r ∈ Sets.Region_full for t ∈ intersect(Sets.Technology, Params.Tags.TagTechnologyToSubsets["CCS"])
             Params.AvailabilityFactor[r,t,:] .= 0
-            Params.TotalAnnualMaxCapacity[r,t,:] .= 99999
-            Params.TotalTechnologyAnnualActivityUpperLimit[r,t,:] .= 99999
+            Params.TotalAnnualMaxCapacity[r,t,:] .= 999999
+            Params.TotalTechnologyAnnualActivityUpperLimit[r,t,:] .= 999999
         end end
 
         for y ∈ Sets.Year for r ∈ Sets.Region_full
@@ -264,8 +264,8 @@ function genesysmod_bounds(model,Sets,Params, Vars,Settings,Switch,Maps)
         end end
 
         if "A_Air" ∈ Sets.Technology  # A_Air (atmospheric CO2 carrier) is absent from power-only datasets
-            Params.TotalAnnualMaxCapacity[Sets.Region_full,"A_Air",:] .= 99999
-            Params.TotalTechnologyAnnualActivityUpperLimit[Sets.Region_full,"A_Air",:] .= 99999
+            Params.TotalAnnualMaxCapacity[Sets.Region_full,"A_Air",:] .= 999999
+            Params.TotalTechnologyAnnualActivityUpperLimit[Sets.Region_full,"A_Air",:] .= 999999
         end
 
         for t ∈ intersect(Sets.Technology, ["X_DAC_HT","X_DAC_LT"])

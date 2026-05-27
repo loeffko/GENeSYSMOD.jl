@@ -87,6 +87,7 @@ function genesysmod_getspecifiedduals(model,Switch,extr_str, specified_constrain
     df=DataFrames.DataFrame(names=[],values=[])
     for con in specified_constraints
         c = constraint_by_name(model,con)
+        c === nothing && continue  # constraint may be absent if its `< 999999` guard skipped it
         d = dual(c)
         n = name(c)
         if d != 0 && n != ""

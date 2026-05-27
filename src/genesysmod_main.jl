@@ -216,7 +216,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         set_optimizer_attribute(model, "Method", 2)
         set_optimizer_attribute(model, "BarHomogeneous", 1)
         set_optimizer_attribute(model, "Crossover", 0)
-        #set_optimizer_attribute(model, "GURO_PAR_DUMP", 1)
+        set_optimizer_attribute(model, "GURO_PAR_DUMP", 1)
         if solver_log
             set_optimizer_attribute(model, "LogFile", joinpath(resultdir,"Run_$(elmod_nthhour)_$(today()).log"))
         end
@@ -229,9 +229,10 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         #CPLEX.CPXsetlogfilename(env, joinpath(resultdir,"Run_$(elmod_nthhour)_$(today()).log"), "w+")
         #set_optimizer_attribute(model, "CPX_PARAM_BAROBJRNG", 1e+075)
     elseif solver_name(model) == "HiGHS"
-        set_optimizer_attribute(model, "solver", "ipm")
+        set_optimizer_attribute(model, "solver", "ipx")
         #set_optimizer_attribute(model, "solver", "pdlp")
         set_optimizer_attribute(model, "run_crossover", "off")
+        set_optimizer_attribute(model, "presolve", "on")
         if solver_log
             set_optimizer_attribute(model, "log_file", joinpath(resultdir,"Run_$(elmod_nthhour)_$(today()).log"))
         end
@@ -250,7 +251,12 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     println("data_file = $data_file")
     println("solver = $solver")
 
-    optimize!(model)
+    # Diagnostic: bracket optimize! so a stall is unambiguously attributed (build vs solver).
+    println("[$(Dates.now())] pre-optimize: vars=$(num_variables(model)) constraints=$(num_constraints(model; count_variable_in_set_constraints=false))")
+    flush(stdout)
+    @time "optimize!" optimize!(model)
+    flush(stdout)
+    println("[$(Dates.now())] post-optimize: status=$(termination_status(model))")
     t_solve_end = Dates.now()
 
     elapsed = (Dates.now() - starttime)#24#3600;

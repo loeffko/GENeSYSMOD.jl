@@ -1,10 +1,10 @@
 using Pkg
 Pkg.develop(path="C:/Users/testbed/Documents/GENeSYSMOD.jl_SE")
 using GENeSYSMOD
-using Gurobi
+using HiGHS
 using Ipopt
 
-solver = Gurobi.Optimizer
+solver = HiGHS.Optimizer
 
 const TEST_RESULTS_DIR = joinpath(pkgdir(GENeSYSMOD),"Results")
 
