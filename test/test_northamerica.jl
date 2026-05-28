@@ -20,7 +20,8 @@ macro track(name, expr)
 end
 
 model, data = @track "NorthAmerica run" genesysmod(;solver=solver, DNLPsolver = Ipopt.Optimizer,
-elmod_daystep = 3, 
+year = 2025,
+elmod_daystep = 3,
 elmod_hourstep = 2, 
 threads=6,
 inputdir = joinpath(pkgdir(GENeSYSMOD),"InputData"),
