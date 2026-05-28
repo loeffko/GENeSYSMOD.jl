@@ -229,10 +229,13 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         #CPLEX.CPXsetlogfilename(env, joinpath(resultdir,"Run_$(elmod_nthhour)_$(today()).log"), "w+")
         #set_optimizer_attribute(model, "CPX_PARAM_BAROBJRNG", 1e+075)
     elseif solver_name(model) == "HiGHS"
-        set_optimizer_attribute(model, "solver", "ipx")
+        set_optimizer_attribute(model, "solver", "hipo")
         #set_optimizer_attribute(model, "solver", "pdlp")
         set_optimizer_attribute(model, "run_crossover", "off")
         set_optimizer_attribute(model, "presolve", "on")
+        set_optimizer_attribute(model, "primal_feasibility_tolerance", 1e-04)
+        set_optimizer_attribute(model, "dual_feasibility_tolerance", 1e-04)
+        set_optimizer_attribute(model, "pdlp_optimality_tolerance", 1e-04)
         if solver_log
             set_optimizer_attribute(model, "log_file", joinpath(resultdir,"Run_$(elmod_nthhour)_$(today()).log"))
         end
