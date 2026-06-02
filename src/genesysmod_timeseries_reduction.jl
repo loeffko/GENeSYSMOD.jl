@@ -114,6 +114,12 @@ function timeseries_reduction!(Params, Sets, Switch)
         "P_PV_Utility_Inf" => "PV_INF",
         "P_PV_Utility_Opt" => "PV_OPT",
         "P_PV_Utility_Tracking" => "PV_TRA",
+        # Rooftop PV profile only meaningful for North America (NA_restool data);
+        # TS_PV_ROOFTOP has zeros for non-NA regions so other model regions get
+        # capacity factor 0 which would zero rooftop generation everywhere else.
+        # Guard the mapping on model_region to avoid wiping rooftop in EU/ME runs.
+        (Switch.model_region == "north_america" ? "P_PV_Rooftop_Commercial"  : "__noop_rooftop_c__") => "PV_ROOFTOP",
+        (Switch.model_region == "north_america" ? "P_PV_Rooftop_Residential" : "__noop_rooftop_r__") => "PV_ROOFTOP",
         "P_Wind_Onshore_Avg" => "WIND_ONSHORE_AVG",
         "P_Wind_Onshore_Inf" => "WIND_ONSHORE_INF",
         "P_Wind_Onshore_Opt" => "WIND_ONSHORE_OPT",
@@ -409,8 +415,10 @@ function timeseries_reduction!(Params, Sets, Switch)
         "Heat_Buildings","Heat_District","Heat_Low_Industrial","Heat_Medium_Industrial",
         "Heat_High_Industrial","Heat_MediumLow_Industrial","Heat_MediumHigh_Industrial",
         "Cool_Low_Building"])
-    capf_list=intersect(Sets.Technology, ["HB_Heatpump_Aerial","HB_Heatpump_Ground","P_PV_Utility_Opt","P_Wind_Onshore_Opt","P_Wind_Offshore_Transitional","P_Wind_Onshore_Avg","P_Wind_Offshore_Shallow","P_PV_Utility_Inf",
-    "P_Wind_Onshore_Inf","P_Wind_Offshore_Deep","P_PV_Utility_Tracking","P_Hydro_RoR", "P_PV_Utility_Avg"])
+    rooftop_pv = Switch.model_region == "north_america" ?
+                 ["P_PV_Rooftop_Commercial", "P_PV_Rooftop_Residential"] : String[]
+    capf_list=intersect(Sets.Technology, vcat(["HB_Heatpump_Aerial","HB_Heatpump_Ground","P_PV_Utility_Opt","P_Wind_Onshore_Opt","P_Wind_Offshore_Transitional","P_Wind_Onshore_Avg","P_Wind_Offshore_Shallow","P_PV_Utility_Inf",
+    "P_Wind_Onshore_Inf","P_Wind_Offshore_Deep","P_PV_Utility_Tracking","P_Hydro_RoR", "P_PV_Utility_Avg"], rooftop_pv))
     #tmp = ScaledCountryData["LOAD"] ./ length(Sets.Timeslice)
     #= for r ∈ Sets.Region_full
         for f ∈ Sets.Fuel

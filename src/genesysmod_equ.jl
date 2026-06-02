@@ -1233,16 +1233,19 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
               base_name="R1_ProductionChange|$(y)|$(𝓛[i])|$(f)|$(t)|$(r)")
             end
             if Params.Tags.TagDispatchableTechnology[t]==1 && Params.RampingUpFactor[t,y] != 0 && Params.AvailabilityFactor[r,t,y] > 0 && Params.TotalAnnualMaxCapacity[r,t,y] > 0 && Params.TotalTechnologyModelPeriodActivityUpperLimit[r,t] > 0
-              # Both sides divided by YearSplit_l to keep coefficients O(1) at fine
-              # timeslice resolution; otherwise YearSplit~1e-4 collapses RHS coef and
-              # the LP becomes ill-conditioned for the barrier solver.
+              # Scale the existing YearSplit-based budget by the effective
+              # dispatch-hour step: in the reduced timeseries, consecutive
+              # sampled hours represent elmod_hourstep real hours apart, so the
+              # budget should reflect that, not the full multi-hour YearSplit.
+              ramp_hours = max(Int(Switch.elmod_hourstep), 1)
               @constraint(model,
-              Vars.ProductionUpChangeInTimeslice[y,𝓛[i],f,t,r] / Params.YearSplit[𝓛[i],y] <= Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y]*Params.CapacityToActivityUnit[t]*Params.RampingUpFactor[t,y],
+              Vars.ProductionUpChangeInTimeslice[y,𝓛[i],f,t,r] <= Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y]*Params.CapacityToActivityUnit[t]*Params.RampingUpFactor[t,y]*Params.YearSplit[𝓛[i],y]*ramp_hours,
               base_name="R2_RampingUpLimit|$(y)|$(𝓛[i])|$(f)|$(t)|$(r)")
             end
             if Params.Tags.TagDispatchableTechnology[t]==1 && Params.RampingDownFactor[t,y] != 0 && Params.AvailabilityFactor[r,t,y] > 0 && Params.TotalAnnualMaxCapacity[r,t,y] > 0 && Params.TotalTechnologyModelPeriodActivityUpperLimit[r,t] > 0
+              ramp_hours = max(Int(Switch.elmod_hourstep), 1)
               @constraint(model,
-              Vars.ProductionDownChangeInTimeslice[y,𝓛[i],f,t,r] / Params.YearSplit[𝓛[i],y] <= Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y]*Params.CapacityToActivityUnit[t]*Params.RampingDownFactor[t,y],
+              Vars.ProductionDownChangeInTimeslice[y,𝓛[i],f,t,r] <= Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y]*Params.CapacityToActivityUnit[t]*Params.RampingDownFactor[t,y]*Params.YearSplit[𝓛[i],y]*ramp_hours,
               base_name="R3_RampingDownLimit|$(y)|$(𝓛[i])|$(f)|$(t)|$(r)")
             end
           end
