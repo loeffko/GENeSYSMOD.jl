@@ -922,7 +922,13 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
   for y ∈ 𝓨 for (t,m) ∈ Maps.Set_Tech_MO for r ∈ 𝓡
     if CanBuildTechnology[y,t,r] > 0
       for e ∈ 𝓔
-        @constraint(model, Params.EmissionActivityRatio[r,t,m,e,y]*sum((Vars.TotalAnnualTechnologyActivityByMode[y,t,m,r]*Params.EmissionContentPerFuel[f,e]*Params.InputActivityRatio[r,t,f,m,y]) for f ∈ Maps.Tech_Fuel[t]) == Vars.AnnualTechnologyEmissionByMode[y,t,e,m,r] , base_name="E1_AnnualEmissionProductionByMode|$(y)|$(t)|$(e)|$(m)|$(r)" )
+        @constraint(model,
+          Params.EmissionActivityRatio[r,t,m,e,y]*sum((Vars.TotalAnnualTechnologyActivityByMode[y,t,m,r]*Params.EmissionContentPerFuel[f,e]*Params.InputActivityRatio[r,t,f,m,y]) for f ∈ Maps.Tech_Fuel[t]; init=0.0)
+          + (Switch.switch_power_only_mode == 1 ?
+                Params.OutputEmissionRatio[r,t,e,m,y] * Params.OutputActivityRatio[r,t,"Power",m,y] * Vars.TotalAnnualTechnologyActivityByMode[y,t,m,r]
+              : 0)
+          == Vars.AnnualTechnologyEmissionByMode[y,t,e,m,r],
+          base_name="E1_AnnualEmissionProductionByMode|$(y)|$(t)|$(e)|$(m)|$(r)")
       end
     else
       for e ∈ 𝓔
@@ -1227,13 +1233,16 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
               base_name="R1_ProductionChange|$(y)|$(𝓛[i])|$(f)|$(t)|$(r)")
             end
             if Params.Tags.TagDispatchableTechnology[t]==1 && Params.RampingUpFactor[t,y] != 0 && Params.AvailabilityFactor[r,t,y] > 0 && Params.TotalAnnualMaxCapacity[r,t,y] > 0 && Params.TotalTechnologyModelPeriodActivityUpperLimit[r,t] > 0
+              # Both sides divided by YearSplit_l to keep coefficients O(1) at fine
+              # timeslice resolution; otherwise YearSplit~1e-4 collapses RHS coef and
+              # the LP becomes ill-conditioned for the barrier solver.
               @constraint(model,
-              Vars.ProductionUpChangeInTimeslice[y,𝓛[i],f,t,r] <= Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y]*Params.CapacityToActivityUnit[t]*Params.RampingUpFactor[t,y]*Params.YearSplit[𝓛[i],y],
+              Vars.ProductionUpChangeInTimeslice[y,𝓛[i],f,t,r] / Params.YearSplit[𝓛[i],y] <= Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y]*Params.CapacityToActivityUnit[t]*Params.RampingUpFactor[t,y],
               base_name="R2_RampingUpLimit|$(y)|$(𝓛[i])|$(f)|$(t)|$(r)")
             end
             if Params.Tags.TagDispatchableTechnology[t]==1 && Params.RampingDownFactor[t,y] != 0 && Params.AvailabilityFactor[r,t,y] > 0 && Params.TotalAnnualMaxCapacity[r,t,y] > 0 && Params.TotalTechnologyModelPeriodActivityUpperLimit[r,t] > 0
               @constraint(model,
-              Vars.ProductionDownChangeInTimeslice[y,𝓛[i],f,t,r] <= Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y]*Params.CapacityToActivityUnit[t]*Params.RampingDownFactor[t,y]*Params.YearSplit[𝓛[i],y],
+              Vars.ProductionDownChangeInTimeslice[y,𝓛[i],f,t,r] / Params.YearSplit[𝓛[i],y] <= Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y]*Params.CapacityToActivityUnit[t]*Params.RampingDownFactor[t,y],
               base_name="R3_RampingDownLimit|$(y)|$(𝓛[i])|$(f)|$(t)|$(r)")
             end
           end
@@ -1259,7 +1268,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
         end
       end
       for t ∈ Sets.Technology
-        if (Params.Tags.TagDispatchableTechnology[t] == 0 || sum(Params.OutputActivityRatio[r,t,f,m,y] for f ∈ Maps.Tech_Fuel[t] for m ∈ Maps.Tech_MO[t]) == 0 || Params.ProductionChangeCost[t,y] == 0 || Params.AvailabilityFactor[r,t,y] == 0 || Params.TotalAnnualMaxCapacity[r,t,y] == 0 || Params.TotalTechnologyModelPeriodActivityUpperLimit[r,t] == 0)
+        if (Params.Tags.TagDispatchableTechnology[t] == 0 || sum(Params.OutputActivityRatio[r,t,f,m,y] for f ∈ Maps.Tech_Fuel[t] for m ∈ Maps.Tech_MO[t]; init=0.0) == 0 || Params.ProductionChangeCost[t,y] == 0 || Params.AvailabilityFactor[r,t,y] == 0 || Params.TotalAnnualMaxCapacity[r,t,y] == 0 || Params.TotalTechnologyModelPeriodActivityUpperLimit[r,t] == 0)
           JuMP.fix(Vars.DiscountedAnnualProductionChangeCost[y,t,r], 0; force=true)
           JuMP.fix(Vars.AnnualProductionChangeCost[y,t,r], 0; force=true)
         end

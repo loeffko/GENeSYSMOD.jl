@@ -132,6 +132,14 @@ function timeseries_reduction!(Params, Sets, Switch)
         "Heat_MediumLow_Industrial" => "HEAT_HIGH",
         "Heat_MediumHigh_Industrial" => "HEAT_HIGH",
         "Heat_Low_Industrial" => "HEAT_HIGH",
+        # Power demand split into end-use categories (North America). Power_General keeps
+        # the real LOAD profile; the others read their own (currently flat dummy) TS.
+        "Power_General" => "LOAD",
+        "Power_DataCenter" => "POWER_DATACENTER",
+        "Power_Buildings_Heat" => "POWER_BUILDINGS_HEAT",
+        "Power_Buildings_Cooling" => "POWER_BUILDINGS_COOLING",
+        "Power_Hydrogen" => "POWER_HYDROGEN",
+        "Power_BEVs" => "POWER_BEVS",
     )
 
     Country_Data_Entries= unique([keys_mapping[k] for k ∈ intersect(keys(keys_mapping), union(Sets.Fuel, Sets.Technology))])
@@ -383,6 +391,12 @@ function timeseries_reduction!(Params, Sets, Switch)
                     ) * JuMP.value(model_scaling1[:scaling_multiplicator][r,cde])
                     ) + JuMP.value(model_scaling1[:scaling_addition][r,cde]))
                 end
+            else
+                # Flat profile (max == min, e.g. the dummy =1 demand timeseries): the
+                # scaling NLP skips it, leaving ScaledCountryData at its zero init. Copy
+                # the raw (constant) series through so it normalises to a uniform shape
+                # instead of an all-zero demand profile.
+                ScaledCountryData[cde][!,r] = CountryData[cde][!,r]
             end
         end end
     end
@@ -419,7 +433,8 @@ function timeseries_reduction!(Params, Sets, Switch)
     end =#
 
     tmp=Dict()
-    for t ∈ intersect(Country_Data_Entries, ["LOAD", "MOBILITY_PSNG", "HEAT_LOW", "HEAT_HIGH", "COOL_LOW"])
+    for t ∈ intersect(Country_Data_Entries, ["LOAD", "MOBILITY_PSNG", "HEAT_LOW", "HEAT_HIGH", "COOL_LOW",
+            "POWER_DATACENTER", "POWER_BUILDINGS_HEAT", "POWER_BUILDINGS_COOLING", "POWER_HYDROGEN", "POWER_BEVS"])
         div = combine(ScaledCountryData[t], names(ScaledCountryData[t]) .=> sum, renamecols=false)
         for col in names(div)
             replace!(div[!, col], 0 => 1)
@@ -427,7 +442,11 @@ function timeseries_reduction!(Params, Sets, Switch)
         tmp[t] = ScaledCountryData[t] ./ div
     end
 
-    end_uses = union(["Power"], Params.Tags.TagFuelToSubsets["HeatFuels"], Params.Tags.TagFuelToSubsets["TransportFuels"])
+    # Power_* end-use demand fuels each take their own profile (Power_General->LOAD,
+    # the rest their dummy TS) via keys_mapping in the override loop below.
+    power_subdemands = intersect(Sets.Fuel, ["Power_General","Power_DataCenter","Power_Buildings_Heat",
+            "Power_Buildings_Cooling","Power_Hydrogen","Power_BEVs"])
+    end_uses = union(["Power"], Params.Tags.TagFuelToSubsets["HeatFuels"], Params.Tags.TagFuelToSubsets["TransportFuels"], power_subdemands)
     for r ∈ Sets.Region_full
         for f ∈ Sets.Fuel
             if sum(Params.SpecifiedAnnualDemand[r,f,:]) != 0

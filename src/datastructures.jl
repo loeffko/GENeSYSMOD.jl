@@ -337,6 +337,9 @@ struct Parameters <: InputClass
 
     EmissionActivityRatio ::JuMP.Containers.DenseAxisArray
     EmissionContentPerFuel ::JuMP.Containers.DenseAxisArray
+    # Output-side per-Power-output emission factor (Gt/PJ_power), filled by the
+    # power-only-mode precompute from the allFuels Excel. Zero otherwise.
+    OutputEmissionRatio ::JuMP.Containers.DenseAxisArray
     EmissionsPenalty ::JuMP.Containers.DenseAxisArray
     EmissionsPenaltyTagTechnology ::JuMP.Containers.DenseAxisArray
     AnnualExogenousEmission ::JuMP.Containers.DenseAxisArray
@@ -823,6 +826,8 @@ struct Switch <: InputClass
     extr_str_results ::String
     extr_str_dispatch ::String
     switch_reserve ::Int16
+    switch_power_only_mode ::Int8
+    allfuels_data_file ::String
 end
 
 """

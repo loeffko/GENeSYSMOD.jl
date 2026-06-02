@@ -1,10 +1,10 @@
 using Pkg
-Pkg.develop(path="C:/Users/testbed/Documents/GENeSYS_MOD.jl")
+Pkg.develop(path="C:/Users/testbed/Documents/GENeSYSMOD.jl_SE")
 using GENeSYSMOD
-using HiGHS
+using Gurobi
 using Ipopt
 
-solver = HiGHS.Optimizer
+solver = Gurobi.Optimizer
 
 const TEST_RESULTS_DIR = joinpath(pkgdir(GENeSYSMOD),"Results")
 
@@ -49,4 +49,5 @@ switch_processed_results = 1,
 write_reduced_timeserie = 1,
 model_region="middleearth",
 data_base_region="Gondor",
+extr_str_results = "ME_full",
 );

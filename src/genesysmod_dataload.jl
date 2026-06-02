@@ -163,6 +163,9 @@ end
 
 function add_extras_sets!(in_data, Technology, Storage, Fuel, s_infeas::WithInfeasibilityTechs, s_dispatch)
     TagFuelToSubsets = read_subsets(in_data, "Par_TagFuelToSubsets")
+    for k ∈ ("HeatFuels", "TransportFuels")  # power-only datasets may omit these subset keys
+        haskey(TagFuelToSubsets, k) || (TagFuelToSubsets[k] = String[])
+    end
     end_uses = union(["Power"], TagFuelToSubsets["HeatFuels"], TagFuelToSubsets["TransportFuels"])
     append!(Technology, ["Infeasibility_$(end_use)" for end_use in end_uses])
 end
@@ -242,6 +245,9 @@ end
 
 function add_extras_tags!(in_data, tags::Tags, sets, s_infeas::WithInfeasibilityTechs, s_dispatch)
     TagFuelToSubsets = read_subsets(in_data, "Par_TagFuelToSubsets")
+    for k ∈ ("HeatFuels", "TransportFuels")  # power-only datasets may omit these subset keys
+        haskey(TagFuelToSubsets, k) || (TagFuelToSubsets[k] = String[])
+    end
     end_uses = union(["Power"], TagFuelToSubsets["HeatFuels"], TagFuelToSubsets["TransportFuels"])
     tags.TagTechnologyToSubsets["DummyTechnology"] = intersect(sets.Technology,["Infeasibility_$(end_use)" for end_use in end_uses])
 end
@@ -277,12 +283,16 @@ function update_inftechs_params!(Params, Sets, s_infeas::WithInfeasibilityTechs,
     Params.EmissionActivityRatio[:,Params.Tags.TagTechnologyToSubsets["DummyTechnology"],:,:,:] .= 0
     Params.AnnualMaxNewCapacity[:,Params.Tags.TagTechnologyToSubsets["DummyTechnology"],:] .= 999999
 
-    Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Passenger",1,"MT_PSNG_ROAD"] .= 1
-    Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Passenger",1,"MT_PSNG_RAIL"] .= 1
-    Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Passenger",1,"MT_PSNG_AIR"] .= 1
-    Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Freight",1,"MT_FRT_ROAD"] .= 1
-    Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Freight",1,"MT_FRT_RAIL"] .= 1
-    Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Freight",1,"MT_FRT_SHIP"] .= 1
+    if "Infeasibility_Mobility_Passenger" ∈ Sets.Technology
+        Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Passenger",1,"MT_PSNG_ROAD"] .= 1
+        Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Passenger",1,"MT_PSNG_RAIL"] .= 1
+        Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Passenger",1,"MT_PSNG_AIR"] .= 1
+    end
+    if "Infeasibility_Mobility_Freight" ∈ Sets.Technology
+        Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Freight",1,"MT_FRT_ROAD"] .= 1
+        Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Freight",1,"MT_FRT_RAIL"] .= 1
+        Params.Tags.TagTechnologyToModalType["Infeasibility_Mobility_Freight",1,"MT_FRT_SHIP"] .= 1
+    end
 end
 
 function update_inftechs_params!(Params, Sets, s_infeas::WithInfeasibilityTechs, s_dispatch::OneNodeStorage)
@@ -365,6 +375,7 @@ function read_params(in_data, Sets, Switch, Tags)
     AnnualExogenousEmission = create_daa(in_data,"Par_AnnualExogenousEmission", 𝓡, 𝓔, 𝓨)
     AnnualSectoralEmissionLimit = create_daa(in_data, "Par_AnnualSectoralEmissionLimit", 𝓔, 𝓢𝓮, 𝓨)
     EmissionContentPerFuel = create_daa(in_data, "Par_EmissionContentPerFuel", 𝓕, 𝓔)
+    OutputEmissionRatio = DenseArray(zeros(length.([𝓡, 𝓣, 𝓔, 𝓜, 𝓨])...), 𝓡, 𝓣, 𝓔, 𝓜, 𝓨)
     RegionalAnnualEmissionLimit = create_daa(in_data,"Par_RegionalAnnualEmissionLimit", 𝓡, 𝓔, 𝓨; inherit_base_world=true, base_region=dbr)
 
     GrowthRateTradeCapacity = create_daa(in_data, "Par_GrowthRateTradeCapacity", 𝓡, 𝓡, 𝓕, 𝓨)
@@ -453,8 +464,8 @@ function read_params(in_data, Sets, Switch, Tags)
         ProductionChangeCost = create_daa(in_data, "Par_ProductionChangeCost",𝓣,𝓨)
         MinActiveProductionPerTimeslice = DenseArray(zeros(length(𝓨), length(𝓛), length(𝓕), length(𝓣), length(𝓡)), 𝓨, 𝓛, 𝓕, 𝓣, 𝓡)
 
-        MinActiveProductionPerTimeslice[:,:,"Power","RES_Hydro_Large",:] .= 0.1
-        MinActiveProductionPerTimeslice[:,:,"Power","RES_Hydro_Small",:] .= 0.05
+        MinActiveProductionPerTimeslice[:,:,"Power","P_Hydro_Reservoir",:] .= 0.1
+        MinActiveProductionPerTimeslice[:,:,"Power","P_Hydro_RoR",:] .= 0.05
     else
         RampingUpFactor = nothing
         RampingDownFactor = nothing
@@ -512,7 +523,7 @@ function read_params(in_data, Sets, Switch, Tags)
     TotalTechnologyAnnualActivityLowerLimit, TotalTechnologyModelPeriodActivityUpperLimit,
     TotalTechnologyModelPeriodActivityLowerLimit,ReserveMarginTagTechnology,
     ReserveMarginTagFuel,ReserveMargin,
-    EmissionActivityRatio, EmissionContentPerFuel,EmissionsPenalty,EmissionsPenaltyTagTechnology,
+    EmissionActivityRatio, EmissionContentPerFuel, OutputEmissionRatio, EmissionsPenalty,EmissionsPenaltyTagTechnology,
     AnnualExogenousEmission,AnnualEmissionLimit,RegionalAnnualEmissionLimit,
     ModelPeriodExogenousEmission,AnnualMinNewCapacity,AnnualMaxNewCapacity,DistrictHeatDemand,
     DistrictHeatSplit,ModelPeriodEmissionLimit,RegionalModelPeriodEmissionLimit,
@@ -577,6 +588,7 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     AnnualExogenousEmission = aggregate_daa(Params_Full.AnnualExogenousEmission, 𝓡, 𝓡_full, Sum(), 𝓔, 𝓨)
     AnnualSectoralEmissionLimit = Params_Full.AnnualSectoralEmissionLimit[:,:,𝓨]
     EmissionContentPerFuel = Params_Full.EmissionContentPerFuel
+    OutputEmissionRatio = Params_Full.OutputEmissionRatio[𝓡,:,:,:,𝓨]
     RegionalAnnualEmissionLimit = aggregate_daa(Params_Full.RegionalAnnualEmissionLimit, 𝓡, 𝓡_full, Sum(), 𝓔, 𝓨)
     AnnualMinNewCapacity = aggregate_daa(Params_Full.AnnualMinNewCapacity, 𝓡, 𝓡_full, Sum(), 𝓣, 𝓨)
     AnnualMaxNewCapacity = aggregate_daa(Params_Full.AnnualMaxNewCapacity, 𝓡, 𝓡_full, Sum(), 𝓣, 𝓨)
@@ -687,7 +699,7 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     TotalTechnologyAnnualActivityLowerLimit, TotalTechnologyModelPeriodActivityUpperLimit,
     TotalTechnologyModelPeriodActivityLowerLimit,ReserveMarginTagTechnology,
     ReserveMarginTagFuel,ReserveMargin,
-    EmissionActivityRatio, EmissionContentPerFuel,EmissionsPenalty,EmissionsPenaltyTagTechnology,
+    EmissionActivityRatio, EmissionContentPerFuel, OutputEmissionRatio, EmissionsPenalty,EmissionsPenaltyTagTechnology,
     AnnualExogenousEmission,AnnualEmissionLimit,RegionalAnnualEmissionLimit,
     ModelPeriodExogenousEmission,AnnualMinNewCapacity,AnnualMaxNewCapacity,DistrictHeatDemand,
     DistrictHeatSplit,ModelPeriodEmissionLimit,RegionalModelPeriodEmissionLimit,

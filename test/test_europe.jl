@@ -1,5 +1,5 @@
 using Pkg
-Pkg.develop(path="C:/Users/testbed/Documents/GENeSYSMOD.jl_SE")
+Pkg.develop(path="C:/Users/testbed/Documents/GENeSYS_MOD.jl")
 using GENeSYSMOD
 using Gurobi
 using Ipopt
@@ -19,32 +19,29 @@ macro track(name, expr)
     end
 end
 
-model, data = @track "NorthAmerica run" genesysmod(;solver=solver, DNLPsolver = Ipopt.Optimizer,
-year = 2025,
-elmod_daystep = 20,
-elmod_hourstep = 4, 
-threads=6,
+model, data = @track "Europe run" genesysmod(;elmod_daystep = 31, elmod_hourstep = 20, solver=solver, DNLPsolver = Ipopt.Optimizer, threads=4,
 inputdir = joinpath(pkgdir(GENeSYSMOD),"InputData"),
 resultdir = TEST_RESULTS_DIR,
-data_file="RegularParameters_NorthAmerica",
-hourly_data_file = "Timeseries_NorthAmerica",
-switch_power_only_mode = 1,
-allfuels_data_file = "RegularParameters_NorthAmerica_allFuels",
-switch_infeasibility_tech = WithInfeasibilityTechs(),
-switch_investLimit=0,
+data_file="RegularParameters_Europe_EnVis_NECPEssentials",
+hourly_data_file = "Timeseries_Europe_EnVis_NECPEssentials",
+emissionPathway = "NECPEssentials",
+switch_infeasibility_tech = NoInfeasibilityTechs(),
+switch_investLimit=1,
 switch_ccs=1,
 switch_ramping=0,
-switch_weighted_emissions=1,
+switch_weighted_emissions=1,  
 switch_intertemporal=0,
-switch_base_year_bounds = 0,
+switch_base_year_bounds = 1,
+switch_base_year_bounds_debugging = 0,
 switch_peaking_capacity = 1,
-set_peaking_slack = 0,
-set_peaking_minrun_share = 0,
+set_peaking_slack = 1,
+set_peaking_minrun_share = 0.25,
 set_peaking_res_cf = 0.5,
-set_peaking_startyear = 2025,
+set_peaking_startyear = 2030,
 switch_peaking_with_storages = 1,
 switch_peaking_with_trade = 1,
 switch_peaking_minrun = 0,
+switch_reserve = 1,
 switch_employment_calculation = 0,
 switch_endogenous_employment = 0,
 employment_data_file = "",
@@ -53,6 +50,9 @@ elmod_dunkelflaute= 0,
 switch_raw_results = NoRawResult(),
 switch_processed_results = 1,
 write_reduced_timeserie = 0,
-model_region="north_america",
-data_base_region="California",
+load_reduced_timeserie= 0,
+model_region="europe",
+data_base_region="DE",
+set_storagelevelstart_down = 0.25,
+set_storagelevelstart_up = 0.75
 );
