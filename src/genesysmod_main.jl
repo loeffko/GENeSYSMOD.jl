@@ -245,6 +245,11 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         set_optimizer_attribute(model, "primal_feasibility_tolerance", 1e-04)
         set_optimizer_attribute(model, "dual_feasibility_tolerance", 1e-04)
         set_optimizer_attribute(model, "pdlp_optimality_tolerance", 1e-04)
+        # IIS strategy: bit2 (elastic IS) | bit8 (true IIS) = 10. Set here,
+        # pre-solve, so it never dirties the model after optimize!. Consumed by
+        # HiGHS native IIS; the MathOptIIS fallback used by current HiGHS.jl
+        # ignores it, but it is harmless and future-proofs the native path.
+        set_optimizer_attribute(model, "iis_strategy", 10)
         if solver_log
             set_optimizer_attribute(model, "log_file", joinpath(resultdir,"Run_$(elmod_nthhour)_$(today()).log"))
         end
@@ -278,20 +283,20 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     #
     if occursin("INFEASIBLE",string(termination_status(model)))
         if switch_iis == 1
-            if occursin("Gurobi",string(solver)) || occursin("CPLEX",string(solver))
                 println("Termination status:", termination_status(model), ". Computing IIS")
                 compute_conflict!(model)
+            # MathOptIIS (what current HiGHS.jl uses for compute_conflict!)
+            # modifies the model internally while running its elastic filter, so
+            # JuMP flags the model "modified since optimize!" and a normal
+            # get_attribute(model, ConflictStatus()) throws OptimizeNotCalled.
+            # Query the MOI backend directly to bypass that guard. This path also
+            # works for Gurobi/CPLEX native IIS, so all solvers share it.
+            cstatus = MOI.get(JuMP.backend(model), MOI.ConflictStatus())
+            if cstatus == MOI.CONFLICT_FOUND
                 println("Saving IIS to file")
                 print_iis(model; filename=joinpath(resultdir,"IIS_$(elmod_nthhour)_$(today())"))
-            elseif occursin("HiGHS",string(solver))
-                println("Termination status:", termination_status(model), ". Printing violations:")
-                res = violations(model)
-                println("Saving violations to file")
-                open(joinpath(resultdir,"IIS_$(elmod_nthhour)_$(today()).txt"), "w") do f
-                    for line in res
-                        println(f, line)
-                    end
-                end
+            else
+                println("No conflict found: ", cstatus)
             end
         else
             error("Model infeasible. Turn on 'switch_iis' to compute and write the iis file")
