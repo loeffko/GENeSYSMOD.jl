@@ -203,6 +203,8 @@ function read_tags(in_data, Sets, Switch, s_infeas, s_dispatch)
 
     TagTechnologyToSubsets = read_subsets(in_data, "Par_TagTechnologyToSubsets") #TODO handle the tags consistently: now we have lists of technology in one and DAA of tech, subsets and 1. Some parameters seems also redundant.
     TagFuelToSubsets = read_subsets(in_data, "Par_TagFuelToSubsets")
+    TagRegionToSubsets = "Par_TagRegionToSubsets" ∈ XLSX.sheetnames(in_data) ?
+        read_subsets(in_data, "Par_TagRegionToSubsets") : Dict{String,Array{String}}()
     # read_subsets only creates a key for subsets that actually appear in the sheet.
     # Sector-reduced datasets (e.g. power-only North America) drop the heat/transport/
     # fossil subset rows, leaving those keys absent and crashing the many downstream
@@ -231,7 +233,7 @@ function read_tags(in_data, Sets, Switch, s_infeas, s_dispatch)
     TagModalTypeToModalGroups = create_daa(in_data, "Par_TagModalTypeToModalGroups", 𝓜𝓽, ["TransportModes","ModalSubgroups"])
     TagCanFuelBeTraded = create_daa(in_data, "Par_TagCanFuelBeTraded", 𝓕)
 
-    tags = Tags(TagTechnologyToSubsets,TagFuelToSubsets,TagDemandFuelToSector,TagElectricTechnology,
+    tags = Tags(TagTechnologyToSubsets,TagFuelToSubsets,TagRegionToSubsets,TagDemandFuelToSector,TagElectricTechnology,
     TagTechnologyToModalType,TagTechnologyToSector,RETagTechnology,RETagFuel,TagDispatchableTechnology,
     TagModalTypeToModalGroups,TagCanFuelBeTraded)
 
@@ -406,6 +408,18 @@ function read_params(in_data, Sets, Switch, Tags)
     TotalAnnualMaxCapacity = create_daa(in_data, "Par_TotalAnnualMaxCapacity", 𝓡, 𝓣, 𝓨)
     NewCapacityExpansionStop = create_daa(in_data, "Par_NewCapacityExpansionStop", 𝓡, 𝓣)
     TotalAnnualMinCapacity = create_daa(in_data, "Par_TotalAnnualMinCapacity", 𝓡, 𝓣, 𝓨)
+
+    # Aggregated capacity limits over (tech subset, region subset, year). Axes
+    # use the keys of the subset dictionaries; empty dataset (no rows) leaves
+    # max at 999999 sentinel (= no limit) and min at 0.
+    𝓣𝓼 = collect(keys(Tags.TagTechnologyToSubsets))
+    𝓡𝓼 = collect(keys(Tags.TagRegionToSubsets))
+    GroupTotalAnnualMaxCapacity = "Par_GroupTotalAnnualMaxCapacity" ∈ XLSX.sheetnames(in_data) ?
+        create_daa_init(in_data, "Par_GroupTotalAnnualMaxCapacity", 999999, 𝓣𝓼, 𝓡𝓼, 𝓨) :
+        DenseArray(fill(999999.0, length(𝓣𝓼), length(𝓡𝓼), length(𝓨)), 𝓣𝓼, 𝓡𝓼, 𝓨)
+    GroupTotalAnnualMinCapacity = "Par_GroupTotalAnnualMinCapacity" ∈ XLSX.sheetnames(in_data) ?
+        create_daa(in_data, "Par_GroupTotalAnnualMinCapacity", 𝓣𝓼, 𝓡𝓼, 𝓨) :
+        DenseArray(zeros(length(𝓣𝓼), length(𝓡𝓼), length(𝓨)), 𝓣𝓼, 𝓡𝓼, 𝓨)
     TotalTechnologyAnnualActivityUpperLimit = create_daa(in_data, "Par_TotalAnnualMaxActivity", 𝓡, 𝓣, 𝓨)
     TotalTechnologyAnnualActivityLowerLimit = create_daa(in_data, "Par_TotalAnnualMinActivity", 𝓡, 𝓣, 𝓨)
     TotalTechnologyModelPeriodActivityUpperLimit = create_daa_init(in_data, "Par_ModelPeriodActivityMaxLimit", 999999, 𝓡, 𝓣)
@@ -518,6 +532,7 @@ function read_params(in_data, Sets, Switch, Tags)
     StorageLevelStart,MinStorageCharge,
     OperationalLifeStorage,CapitalCostStorage,ResidualStorageCapacity,TechnologyToStorage,
     TechnologyFromStorage,StorageMaxCapacity,TotalAnnualMaxCapacity, NewCapacityExpansionStop,TotalAnnualMinCapacity,
+    GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,
     AnnualSectoralEmissionLimit,TotalAnnualMaxCapacityInvestment,
     TotalAnnualMinCapacityInvestment,TotalTechnologyAnnualActivityUpperLimit,
     TotalTechnologyAnnualActivityLowerLimit, TotalTechnologyModelPeriodActivityUpperLimit,
@@ -621,6 +636,11 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     NewCapacityExpansionStop = JuMP.Containers.DenseAxisArray(zeros(length(𝓡),length(𝓣)), 𝓡, 𝓣)
 
     TotalAnnualMinCapacity = aggregate_daa(Params_Full.TotalAnnualMinCapacity, 𝓡, 𝓡_full, Sum(), 𝓣, 𝓨)
+    # Group capacity limits — dispatch path: dataset-defined subset axes don't change with
+    # region slicing, so just slice the year dimension (subsets stay; sub-region totals will
+    # be checked against the same group limits as the full model).
+    GroupTotalAnnualMaxCapacity = Params_Full.GroupTotalAnnualMaxCapacity[:,:,𝓨]
+    GroupTotalAnnualMinCapacity = Params_Full.GroupTotalAnnualMinCapacity[:,:,𝓨]
     TotalTechnologyAnnualActivityUpperLimit = aggregate_daa(Params_Full.TotalTechnologyAnnualActivityUpperLimit, 𝓡, 𝓡_full, Sum(), 𝓣, 𝓨)
     TotalTechnologyAnnualActivityLowerLimit = aggregate_daa(Params_Full.TotalTechnologyAnnualActivityLowerLimit, 𝓡, 𝓡_full, Sum(), 𝓣, 𝓨)
     TotalTechnologyModelPeriodActivityUpperLimit = aggregate_daa(Params_Full.TotalTechnologyModelPeriodActivityUpperLimit, 𝓡, 𝓡_full, Sum(), 𝓣)
@@ -694,6 +714,7 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     OperationalLifeStorage,CapitalCostStorage,ResidualStorageCapacity,TechnologyToStorage,
     TechnologyFromStorage,StorageMaxCapacity,TotalAnnualMaxCapacity,
     NewCapacityExpansionStop,TotalAnnualMinCapacity,
+    GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,
     AnnualSectoralEmissionLimit,TotalAnnualMaxCapacityInvestment,
     TotalAnnualMinCapacityInvestment,TotalTechnologyAnnualActivityUpperLimit,
     TotalTechnologyAnnualActivityLowerLimit, TotalTechnologyModelPeriodActivityUpperLimit,
