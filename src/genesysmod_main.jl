@@ -173,7 +173,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     elmod_dunkelflaute = 0, switch_raw_results = NoRawResult(), switch_processed_results = 0, write_reduced_timeserie = 1, load_reduced_timeserie = 0, switch_LCOE_calc=0,
     switch_reserve=0,switch_base_year_bounds_debugging=0,
     switch_power_only_mode=0, allfuels_data_file="",
-    extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1, solver_log=true, solver_attr=Dict())
+    extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1, solver_log=true, solver_attr=Dict(), switch_test_data_load=0)
 
     starttime = Dates.now()
 
@@ -213,6 +213,17 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     Settings = case["Settings"]
     considered_duals = case["ConsideredDuals"]
     switch = case["Switch"]
+
+    # switch_test_data_load: dump the processed input parameters to SQLite for
+    # inspection, then stop before solver setup / optimize! (mirrors the GAMS
+    # switch_test_data_load behaviour). The data in case["Params"] here is
+    # post-interpolation/aggregation, so this verifies the full read + process.
+    if switch_test_data_load == 1
+        println("switch_test_data_load active: dumping input data to SQLite, skipping solve.")
+        dump_inputs_sqlite(case, switch)
+        return model, case
+    end
+
     #
     # ####### CPLEX Options #############
     #
@@ -283,8 +294,8 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     #
     if occursin("INFEASIBLE",string(termination_status(model)))
         if switch_iis == 1
-                println("Termination status:", termination_status(model), ". Computing IIS")
-                compute_conflict!(model)
+            println("Termination status:", termination_status(model), ". Computing IIS")
+            compute_conflict!(model)
             # MathOptIIS (what current HiGHS.jl uses for compute_conflict!)
             # modifies the model internally while running its elastic filter, so
             # JuMP flags the model "modified since optimize!" and a normal

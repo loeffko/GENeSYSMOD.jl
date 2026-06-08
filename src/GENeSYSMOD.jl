@@ -7,6 +7,7 @@ GAMS version of the model.
 module GENeSYSMOD
 
 using DataFrames
+using SQLite
 using Dates
 using JuMP
 using XLSX

@@ -124,3 +124,56 @@ function genesysmod_getdualsbyname(model,Switch,extr_str, constr_name)
 
     return df
 end
+
+"""
+    dump_inputs_sqlite(case, switch; filename="input_data")
+
+Dump the processed input data to a single SQLite database for inspection.
+One table per parameter in long format (index columns dim1..dimN, plus value),
+one table per index set (prefixed SET_). Open with any SQLite browser such as
+DB Browser for SQLite, or query from Julia/Python. Values are post
+interpolation/aggregation, i.e. exactly what the model was built from.
+
+Requires the SQLite package (add it with `] add SQLite`).
+"""
+function dump_inputs_sqlite(case, switch::Switch; filename="input_data")
+    Params = case["Params"]
+    Sets   = case["Sets"]
+    dbpath = joinpath(switch.resultdir[],
+        "$(filename)_$(switch.model_region)_$(switch.emissionPathway)_$(switch.emissionScenario).sqlite")
+    isfile(dbpath) && rm(dbpath)
+    db = SQLite.DB(dbpath)
+    ntables = 0
+
+    # --- parameters: DenseAxisArray -> long table ---
+    for field in fieldnames(typeof(Params))
+        daa = getfield(Params, field)
+        daa isa JuMP.Containers.DenseAxisArray || continue
+        try
+            df = DataFrame(JuMP.Containers.rowtable(identity, daa))
+            isempty(df) && continue
+            # rename to SQL-safe generic columns: dim1..dimN, value
+            rename!(df, vcat(["dim$(i)" for i in 1:ncol(df)-1], ["value"]))
+            SQLite.load!(df, db, string(field))
+            ntables += 1
+        catch e
+            @warn "Could not dump parameter $(field)" exception=e
+        end
+    end
+
+    # --- index sets: vector -> single-column table ---
+    for field in fieldnames(typeof(Sets))
+        s = getfield(Sets, field)
+        s isa AbstractVector || continue
+        try
+            SQLite.load!(DataFrame(value = collect(s)), db, "SET_" * string(field))
+            ntables += 1
+        catch e
+            @warn "Could not dump set $(field)" exception=e
+        end
+    end
+
+    close(db)
+    println("Dumped $(ntables) tables to $(dbpath)")
+    return dbpath
+end
