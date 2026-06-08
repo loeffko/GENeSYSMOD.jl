@@ -780,6 +780,11 @@ additional metrics not part of the raw results.\n
 - **`extr_str_dispatch ::String`**  If switch_dispatch = 1, final name of the result file form the investment
 run that will be read to fix some decision variables.\n
  - **`switch_reserve ::Int16`** Used to enable reserve margin constraints\n
+- **`switch_endogenous_specifieddemandforecasting ::Int8`** If 1, SpecifiedAnnualDemand for
+  years after the start year is overwritten using the base year value compounded by
+  SpecifiedDemandDevelopment (legacy OSeMOSYS-style growth). If 0 (default), the per-year
+  values read from `Par_SpecifiedAnnualDemand` are used directly, so each year reflects
+  the input data instead of being derived from year 1.\n
 """
 struct Switch <: InputClass
     StartYear :: Int16
@@ -835,6 +840,7 @@ struct Switch <: InputClass
     switch_reserve ::Int16
     switch_power_only_mode ::Int8
     allfuels_data_file ::String
+    switch_endogenous_specifieddemandforecasting ::Int8
 end
 
 """

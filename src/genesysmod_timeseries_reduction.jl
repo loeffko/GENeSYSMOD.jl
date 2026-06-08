@@ -399,10 +399,11 @@ function timeseries_reduction!(Params, Sets, Switch)
                 end
             else
                 # Flat profile (max == min, e.g. the dummy =1 demand timeseries): the
-                # scaling NLP skips it, leaving ScaledCountryData at its zero init. Copy
-                # the raw (constant) series through so it normalises to a uniform shape
-                # instead of an all-zero demand profile.
-                ScaledCountryData[cde][!,r] = CountryData[cde][!,r]
+                # scaling NLP skips it. Copy the raw series ONLY for the reduced
+                # Sets.Timeslice rows — matching the if-branch shape — so the later
+                # ScaledCountryData ./ sum normalisation (which sums all 8760 rows)
+                # produces a profile that sums to 1 over the reduced timeslices.
+                ScaledCountryData[cde][Sets.Timeslice,r] = CountryData[cde][Sets.Timeslice,r]
             end
         end end
     end
