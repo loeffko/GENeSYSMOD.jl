@@ -14,7 +14,8 @@ function genesysmod_build_model_dispatch(;elmod_nthhour = 1, elmod_starthour=1, 
         switch_employment_calculation = 0, switch_endogenous_employment = 0, employment_data_file = "",
         elmod_dunkelflaute = 0, switch_raw_results = CSVResult(), switch_processed_results = 1, switch_LCOE_calc=0,
         switch_dispatch = OneNodeSimple("DE"), extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",
-        switch_base_year_bounds_debugging = 0, switch_reserve = 0, switch_iis=1,dispatch_week=nothing)
+        switch_base_year_bounds_debugging = 0, switch_reserve = 0, switch_iis=1,dispatch_week=nothing,
+        switch_results_db=1)
 
     elmod_daystep = elmod_nthhour ÷ 24
     elmod_hourstep = elmod_nthhour % 24
@@ -83,7 +84,11 @@ function genesysmod_build_model_dispatch(;elmod_nthhour = 1, elmod_starthour=1, 
     switch_LCOE_calc,
     extr_str_results,
     extr_str_dispatch,
-    switch_reserve)
+    switch_reserve,
+    0,      # switch_power_only_mode  (not used in dispatch runs)
+    "",     # allfuels_data_file
+    0,      # switch_endogenous_specifieddemandforecasting
+    switch_results_db)
 
     starttime= Dates.now()
     model= JuMP.Model()
@@ -272,7 +277,10 @@ function genesysmod_dispatch(;elmod_nthhour = 1, elmod_starthour = 1, solver, DN
             genesysmod_results(model, Sets, Params, VarPar, Vars, switch,
              Settings, Maps, elapsed,switch.extr_str_dispatch)
         end
-        genesysmod_results_raw(model, VarPar, Params, switch,switch.extr_str_dispatch,switch.switch_raw_results)
+        genesysmod_results_raw(model, VarPar, Params, Sets, switch,switch.extr_str_dispatch,switch.switch_raw_results)
+        if switch.switch_results_db == 1
+            write_raw_results_db(model, VarPar, Params, Sets, switch, switch.extr_str_dispatch)
+        end
         genesysmod_getspecifiedduals(model,switch,switch.extr_str_dispatch, considered_duals)
     else
         println("Termination status:", termination_status(model), ".")

@@ -8,14 +8,22 @@ end
 """
 Write the values of each variable in the model to CSV files.
 """
-function genesysmod_results_raw(model, VarPar, Params, Switch,extr_str, s_rawresults::CSVResult)
+# rowtable with real dimension names where derivable (see genesysmod_db.jl);
+# falls back to JuMP's default x1..xN header when the axes match no known set.
+function _named_rowtable(container, name::Symbol, Sets)
+    header = _rowtable_header(container, name, Sets)
+    return header === nothing ? JuMP.Containers.rowtable(value, container) :
+                                JuMP.Containers.rowtable(value, container; header=header)
+end
+
+function genesysmod_results_raw(model, VarPar, Params, Sets, Switch,extr_str, s_rawresults::CSVResult)
     vars = _registered_variables(model)
     Threads.@threads for v in vars
         if v ∉ [:cost, :z]
             @debug "Saving " v
             fn = joinpath(Switch.resultdir[], string(v) * "_" * Switch.model_region * "_"
              * Switch.emissionPathway * "_" * Switch.emissionScenario * "_" * extr_str * ".csv")
-            CSV.write(fn, JuMP.Containers.rowtable(value, model[v]))
+            CSV.write(fn, _named_rowtable(model[v], v, Sets))
         end
     end
     for field in fieldnames(typeof(VarPar))
@@ -23,21 +31,21 @@ function genesysmod_results_raw(model, VarPar, Params, Switch,extr_str, s_rawres
         if isa(daa, DenseArray)
             fn = joinpath(Switch.resultdir[], string(field) * "_" * Switch.model_region * "_" *
                           Switch.emissionPathway * "_" * Switch.emissionScenario * "_" * extr_str * ".csv")
-            CSV.write(fn, JuMP.Containers.rowtable(value, daa))
+            CSV.write(fn, _named_rowtable(daa, field, Sets))
         end
     end
     fn = joinpath(Switch.resultdir[], "RateOfDemand_" * Switch.model_region * "_" *
                           Switch.emissionPathway * "_" * Switch.emissionScenario * "_" * extr_str * ".csv")
-    CSV.write(fn, JuMP.Containers.rowtable(value, Params.RateOfDemand))
+    CSV.write(fn, _named_rowtable(Params.RateOfDemand, :RateOfDemand, Sets))
     fn = joinpath(Switch.resultdir[], "Demand_" * Switch.model_region * "_" *
             Switch.emissionPathway * "_" * Switch.emissionScenario * "_" * extr_str * ".csv")
-    CSV.write(fn, JuMP.Containers.rowtable(value, Params.Demand))
+    CSV.write(fn, _named_rowtable(Params.Demand, :Demand, Sets))
 end
 
-function genesysmod_results_raw(model, VarPar, Params, Switch,extr_str, s_rawresults::NoRawResult)
+function genesysmod_results_raw(model, VarPar, Params, Sets, Switch,extr_str, s_rawresults::NoRawResult)
 end
 
-function genesysmod_results_raw(model, VarPar, Params, Switch, extr_str, s_rawresults::TXTResult)
+function genesysmod_results_raw(model, VarPar, Params, Sets, Switch, extr_str, s_rawresults::TXTResult)
     open(joinpath(Switch.resultdir[], "$(s_rawresults.filename)_$(extr_str).txt"), "w") do file
         objective = objective_value(model)
         println(file, "Objective = $objective")
@@ -64,9 +72,9 @@ function genesysmod_results_raw(model, VarPar, Params, Switch, extr_str, s_rawre
     end
 end
 
-function genesysmod_results_raw(model, VarPar, Params, Switch,extr_str, s_rawresults::TXTandCSV)
-    genesysmod_results_raw(model, VarPar, Params, Switch,extr_str, CSVResult())
-    genesysmod_results_raw(model, VarPar, Params, Switch,extr_str, TXTResult(s_rawresults.filename))
+function genesysmod_results_raw(model, VarPar, Params, Sets, Switch,extr_str, s_rawresults::TXTandCSV)
+    genesysmod_results_raw(model, VarPar, Params, Sets, Switch,extr_str, CSVResult())
+    genesysmod_results_raw(model, VarPar, Params, Sets, Switch,extr_str, TXTResult(s_rawresults.filename))
 end
 
 function genesysmod_getduals(model,Switch,extr_str)
@@ -125,55 +133,5 @@ function genesysmod_getdualsbyname(model,Switch,extr_str, constr_name)
     return df
 end
 
-"""
-    dump_inputs_sqlite(case, switch; filename="input_data")
-
-Dump the processed input data to a single SQLite database for inspection.
-One table per parameter in long format (index columns dim1..dimN, plus value),
-one table per index set (prefixed SET_). Open with any SQLite browser such as
-DB Browser for SQLite, or query from Julia/Python. Values are post
-interpolation/aggregation, i.e. exactly what the model was built from.
-
-Requires the SQLite package (add it with `] add SQLite`).
-"""
-function dump_inputs_sqlite(case, switch::Switch; filename="input_data")
-    Params = case["Params"]
-    Sets   = case["Sets"]
-    dbpath = joinpath(switch.resultdir[],
-        "$(filename)_$(switch.model_region)_$(switch.emissionPathway)_$(switch.emissionScenario).sqlite")
-    isfile(dbpath) && rm(dbpath)
-    db = SQLite.DB(dbpath)
-    ntables = 0
-
-    # --- parameters: DenseAxisArray -> long table ---
-    for field in fieldnames(typeof(Params))
-        daa = getfield(Params, field)
-        daa isa JuMP.Containers.DenseAxisArray || continue
-        try
-            df = DataFrame(JuMP.Containers.rowtable(identity, daa))
-            isempty(df) && continue
-            # rename to SQL-safe generic columns: dim1..dimN, value
-            rename!(df, vcat(["dim$(i)" for i in 1:ncol(df)-1], ["value"]))
-            SQLite.load!(df, db, string(field))
-            ntables += 1
-        catch e
-            @warn "Could not dump parameter $(field)" exception=e
-        end
-    end
-
-    # --- index sets: vector -> single-column table ---
-    for field in fieldnames(typeof(Sets))
-        s = getfield(Sets, field)
-        s isa AbstractVector || continue
-        try
-            SQLite.load!(DataFrame(value = collect(s)), db, "SET_" * string(field))
-            ntables += 1
-        catch e
-            @warn "Could not dump set $(field)" exception=e
-        end
-    end
-
-    close(db)
-    println("Dumped $(ntables) tables to $(dbpath)")
-    return dbpath
-end
+# The input-data dump moved to DuckDB: see dump_inputs_db in genesysmod_db.jl
+# (writes genesysmod_inputdata_db.duckdb with real dimension names).

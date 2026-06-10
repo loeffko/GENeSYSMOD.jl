@@ -310,10 +310,13 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
     end
 
     ### parameter output_model(*,*,*,*)
+    # rows pushed positionally — pushing a vector of Pairs stores the Pair
+    # itself in each cell (that bug shipped ":Type => ..." strings in the CSV).
+    # Elapsed time stored as seconds so the Value column stays numeric.
     colnames = [:Type, :PathwayScenario, :Pathway, :Scenario, :Value]
     output_model = DataFrame([name => [] for name in colnames])
-    push!(output_model, [name => val for (name,val) in zip(colnames,["Objective Value","$(Switch.emissionPathway)_$(Switch.emissionScenario)","$(Switch.emissionPathway)","$(Switch.emissionScenario)", JuMP.objective_value(model)])])
-    push!(output_model, [name => val for (name,val) in zip(colnames,["Elapsed Time","$(Switch.emissionPathway)_$(Switch.emissionScenario)","$(Switch.emissionPathway)","$(Switch.emissionScenario)", elapsed])])
+    push!(output_model, ["Objective Value","$(Switch.emissionPathway)_$(Switch.emissionScenario)","$(Switch.emissionPathway)","$(Switch.emissionScenario)", JuMP.objective_value(model)])
+    push!(output_model, ["Elapsed Time [s]","$(Switch.emissionPathway)_$(Switch.emissionScenario)","$(Switch.emissionPathway)","$(Switch.emissionScenario)", Dates.value(Dates.Millisecond(elapsed))/1000])
 
     ### parameter z_maxgenerationperyear(r_full,t,y_full)
     z_maxgenerationperyear = JuMP.Containers.DenseAxisArray(zeros(length(Sets.Region_full),length(Sets.Technology),length(Sets.Year)), Sets.Region_full, Sets.Technology, Sets.Year)
@@ -1031,14 +1034,25 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
     #### Excel Output Sheet Definition and Export of GDX
     ####
 
-    CSV.write(joinpath(Switch.resultdir[],"output_production_$(Switch.model_region)_$(Switch.emissionPathway)_$(Switch.emissionScenario)_$(extr_str).csv"), output_energy_balance[output_energy_balance.Value .!= 0, :])
-    CSV.write(joinpath(Switch.resultdir[],"output_annual_production_$(Switch.model_region)_$(Switch.emissionPathway)_$(Switch.emissionScenario)_$(extr_str).csv"), output_energy_balance_annual[output_energy_balance_annual.Value .!= 0, :])
-    CSV.write(joinpath(Switch.resultdir[],"output_capacity_$(Switch.model_region)_$(Switch.emissionPathway)_$(Switch.emissionScenario)_$(extr_str).csv"), output_capacity[output_capacity.Value .!= 0, :])
-    CSV.write(joinpath(Switch.resultdir[],"output_emission_$(Switch.model_region)_$(Switch.emissionPathway)_$(Switch.emissionScenario)_$(extr_str).csv"), output_emissions[output_emissions.Value .!= 0, :])
-    CSV.write(joinpath(Switch.resultdir[],"output_other_$(Switch.model_region)_$(Switch.emissionPathway)_$(Switch.emissionScenario)_$(extr_str).csv"), output_other[output_other.Value .!= 0, :])
-    CSV.write(joinpath(Switch.resultdir[],"output_model_$(Switch.model_region)_$(Switch.emissionPathway)_$(Switch.emissionScenario)_$(extr_str).csv"), output_model[output_model.Value .!= 0, :])
-    CSV.write(joinpath(Switch.resultdir[],"output_technology_costs_detailed_$(Switch.model_region)_$(Switch.emissionPathway)_$(Switch.emissionScenario)_$(extr_str).csv"), output_technology_costs_detailed[output_technology_costs_detailed.Value .!= 0, :])
-    CSV.write(joinpath(Switch.resultdir[],"output_exogenous_costs_$(Switch.model_region)_$(Switch.emissionPathway)_$(Switch.emissionScenario)_$(extr_str).csv"), output_exogenous_costs[output_exogenous_costs.Value .!= 0, :])
-    CSV.write(joinpath(Switch.resultdir[],"output_trade_$(Switch.model_region)_$(Switch.emissionPathway)_$(Switch.emissionScenario)_$(extr_str).csv"), output_trade[output_trade.Value .!= 0, :])
-    CSV.write(joinpath(Switch.resultdir[],"output_energydemandstatistics_$(Switch.model_region)_$(Switch.emissionPathway)_$(Switch.emissionScenario)_$(extr_str).csv"), output_energydemandstatistics[output_energydemandstatistics.Value .!= 0, :])
+    processed_tables = Dict(
+        "output_production" => output_energy_balance[output_energy_balance.Value .!= 0, :],
+        "output_annual_production" => output_energy_balance_annual[output_energy_balance_annual.Value .!= 0, :],
+        "output_capacity" => output_capacity[output_capacity.Value .!= 0, :],
+        "output_emission" => output_emissions[output_emissions.Value .!= 0, :],
+        "output_other" => output_other[output_other.Value .!= 0, :],
+        "output_model" => output_model[output_model.Value .!= 0, :],
+        "output_technology_costs_detailed" => output_technology_costs_detailed[output_technology_costs_detailed.Value .!= 0, :],
+        "output_exogenous_costs" => output_exogenous_costs[output_exogenous_costs.Value .!= 0, :],
+        "output_trade" => output_trade[output_trade.Value .!= 0, :],
+        "output_energydemandstatistics" => output_energydemandstatistics[output_energydemandstatistics.Value .!= 0, :],
+    )
+
+    for (tname, df) in processed_tables
+        CSV.write(joinpath(Switch.resultdir[],"$(tname)_$(Switch.model_region)_$(Switch.emissionPathway)_$(Switch.emissionScenario)_$(extr_str).csv"), df)
+    end
+
+    if Switch.switch_results_db == 1
+        write_processed_results_db(processed_tables, Sets, Switch, extr_str)
+        println("Processed results written to $(_results_db_path(Switch)) (scenario '$(extr_str)')")
+    end
 end

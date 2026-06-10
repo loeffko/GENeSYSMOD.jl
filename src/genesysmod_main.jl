@@ -18,7 +18,7 @@ function genesysmod_build_model(;elmod_daystep, elmod_hourstep, solver=nothing, 
     elmod_dunkelflaute = 0, switch_raw_results = NoRawResult(), switch_processed_results = 0, write_reduced_timeserie = 1, load_reduced_timeserie = 0, switch_LCOE_calc=0,
     switch_reserve=0,switch_base_year_bounds_debugging=0,
     switch_power_only_mode=0, allfuels_data_file="",
-    switch_endogenous_specifieddemandforecasting=0,
+    switch_endogenous_specifieddemandforecasting=0, switch_results_db=1,
     extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1)
 
     if elmod_nthhour != 0 && (elmod_daystep !=0 || elmod_hourstep !=0)
@@ -94,7 +94,8 @@ function genesysmod_build_model(;elmod_daystep, elmod_hourstep, solver=nothing, 
     switch_reserve,
     switch_power_only_mode,
     allfuels_data_file,
-    switch_endogenous_specifieddemandforecasting)
+    switch_endogenous_specifieddemandforecasting,
+    switch_results_db)
 
     model= JuMP.Model()
 
@@ -175,8 +176,8 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     elmod_dunkelflaute = 0, switch_raw_results = NoRawResult(), switch_processed_results = 0, write_reduced_timeserie = 1, load_reduced_timeserie = 0, switch_LCOE_calc=0,
     switch_reserve=0,switch_base_year_bounds_debugging=0,
     switch_power_only_mode=0, allfuels_data_file="",
-    switch_endogenous_specifieddemandforecasting=0,
-    extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1, solver_log=true, solver_attr=Dict(), 
+    switch_endogenous_specifieddemandforecasting=0, switch_results_db=1,
+    extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1, solver_log=true, solver_attr=Dict(),
     switch_test_data_load=0)
 
     starttime = Dates.now()
@@ -208,6 +209,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     switch_reserve=switch_reserve,
     switch_power_only_mode=switch_power_only_mode, allfuels_data_file=allfuels_data_file,
     switch_endogenous_specifieddemandforecasting=switch_endogenous_specifieddemandforecasting,
+    switch_results_db=switch_results_db,
     extr_str_results = extr_str_results, extr_str_dispatch=extr_str_dispatch,
     switch_iis=switch_iis);
     t_build_end = Dates.now()
@@ -219,13 +221,14 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     considered_duals = case["ConsideredDuals"]
     switch = case["Switch"]
 
-    # switch_test_data_load: dump the processed input parameters to SQLite for
-    # inspection, then stop before solver setup / optimize! (mirrors the GAMS
-    # switch_test_data_load behaviour). The data in case["Params"] here is
-    # post-interpolation/aggregation, so this verifies the full read + process.
+    # switch_test_data_load: dump the processed input parameters to DuckDB
+    # (genesysmod_inputdata_db.duckdb) for inspection, then stop before solver
+    # setup / optimize! (mirrors the GAMS switch_test_data_load behaviour).
+    # The data in case["Params"] here is post-interpolation/aggregation, so
+    # this verifies the full read + process.
     if switch_test_data_load == 1
-        println("switch_test_data_load active: dumping input data to SQLite, skipping solve.")
-        dump_inputs_sqlite(case, switch)
+        println("switch_test_data_load active: dumping input data to DuckDB, skipping solve.")
+        dump_inputs_db(case, switch)
         return model, case
     end
 
@@ -327,8 +330,12 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
              Settings, Maps, elapsed, switch.extr_str_results)
             println("  Results: processed : ", Dates.now()-_tr); _tr = Dates.now()
         end
-        genesysmod_results_raw(model, VarPar, Params, switch,switch.extr_str_results, switch.switch_raw_results)
+        genesysmod_results_raw(model, VarPar, Params, Sets, switch,switch.extr_str_results, switch.switch_raw_results)
         println("  Results: raw : ", Dates.now()-_tr); _tr = Dates.now()
+        if switch.switch_results_db == 1
+            write_raw_results_db(model, VarPar, Params, Sets, switch, switch.extr_str_results)
+            println("  Results: db : ", Dates.now()-_tr); _tr = Dates.now()
+        end
         genesysmod_getspecifiedduals(model,switch,switch.extr_str_results, considered_duals)
         println("  Results: specified_duals : ", Dates.now()-_tr)
     else

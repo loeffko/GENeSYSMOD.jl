@@ -785,6 +785,11 @@ run that will be read to fix some decision variables.\n
   SpecifiedDemandDevelopment (legacy OSeMOSYS-style growth). If 0 (default), the per-year
   values read from `Par_SpecifiedAnnualDemand` are used directly, so each year reflects
   the input data instead of being derived from year 1.\n
+- **`switch_results_db ::Int8`** If 1 (default), all outputs (processed result tables,
+  raw variables, VarPar intermediates) are additionally written to a single DuckDB file
+  `genesysmod_results_db.duckdb` in the result directory. Tables are keyed by a
+  `Scenario` column = `extr_str_results`: re-running a scenario overwrites exactly its
+  rows, a new scenario name appends.\n
 """
 struct Switch <: InputClass
     StartYear :: Int16
@@ -841,6 +846,7 @@ struct Switch <: InputClass
     switch_power_only_mode ::Int8
     allfuels_data_file ::String
     switch_endogenous_specifieddemandforecasting ::Int8
+    switch_results_db ::Int8
 end
 
 """
