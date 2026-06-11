@@ -1034,17 +1034,25 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
     #### Excel Output Sheet Definition and Export of GDX
     ####
 
+    # GAMS parity (genesysmod_results.gms): every output value is rounded to
+    # 4 digits. Rounding BEFORE the != 0 filter also drops the e-09 noise rows
+    # that barrier runs without crossover produce.
+    _round4(df) = begin
+        out = copy(df)
+        out.Value = round.(out.Value, digits=4)
+        out[out.Value .!= 0, :]
+    end
     processed_tables = Dict(
-        "output_production" => output_energy_balance[output_energy_balance.Value .!= 0, :],
-        "output_annual_production" => output_energy_balance_annual[output_energy_balance_annual.Value .!= 0, :],
-        "output_capacity" => output_capacity[output_capacity.Value .!= 0, :],
-        "output_emission" => output_emissions[output_emissions.Value .!= 0, :],
-        "output_other" => output_other[output_other.Value .!= 0, :],
-        "output_model" => output_model[output_model.Value .!= 0, :],
-        "output_technology_costs_detailed" => output_technology_costs_detailed[output_technology_costs_detailed.Value .!= 0, :],
-        "output_exogenous_costs" => output_exogenous_costs[output_exogenous_costs.Value .!= 0, :],
-        "output_trade" => output_trade[output_trade.Value .!= 0, :],
-        "output_energydemandstatistics" => output_energydemandstatistics[output_energydemandstatistics.Value .!= 0, :],
+        "output_production" => _round4(output_energy_balance),
+        "output_annual_production" => _round4(output_energy_balance_annual),
+        "output_capacity" => _round4(output_capacity),
+        "output_emission" => _round4(output_emissions),
+        "output_other" => _round4(output_other),
+        "output_model" => _round4(output_model),
+        "output_technology_costs_detailed" => _round4(output_technology_costs_detailed),
+        "output_exogenous_costs" => _round4(output_exogenous_costs),
+        "output_trade" => _round4(output_trade),
+        "output_energydemandstatistics" => _round4(output_energydemandstatistics),
     )
 
     for (tname, df) in processed_tables
