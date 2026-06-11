@@ -18,7 +18,7 @@ function genesysmod_build_model(;elmod_daystep, elmod_hourstep, solver=nothing, 
     elmod_dunkelflaute = 0, switch_raw_results = NoRawResult(), switch_processed_results = 0, write_reduced_timeserie = 1, load_reduced_timeserie = 0, switch_LCOE_calc=0,
     switch_reserve=0,switch_base_year_bounds_debugging=0,
     switch_power_only_mode=0, allfuels_data_file="",
-    switch_endogenous_specifieddemandforecasting=0, switch_results_db=1,
+    switch_endogenous_specifieddemandforecasting=0, switch_results_db=1, switch_errorcheck=1,
     extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1)
 
     if elmod_nthhour != 0 && (elmod_daystep !=0 || elmod_hourstep !=0)
@@ -95,7 +95,8 @@ function genesysmod_build_model(;elmod_daystep, elmod_hourstep, solver=nothing, 
     switch_power_only_mode,
     allfuels_data_file,
     switch_endogenous_specifieddemandforecasting,
-    switch_results_db)
+    switch_results_db,
+    switch_errorcheck)
 
     model= JuMP.Model()
 
@@ -145,6 +146,16 @@ function genesysmod_build_model(;elmod_daystep, elmod_hourstep, solver=nothing, 
     println("Build: scenariodata : ", Dates.now()-_tb); _tb = Dates.now()
 
     #
+    # ####### Input-data error checks (port of genesysmod_errorcheck.gms) #############
+    # Runs after bounds + scenariodata, like the GAMS include order, so the
+    # programmatic parameter fills (ImportTechnology OperationalLife,
+    # Solar_Thermal CapacityFactor copies, ...) are already in place.
+    #
+
+    genesysmod_errorcheck(Sets, Params, switch)
+    println("Build: errorcheck : ", Dates.now()-_tb); _tb = Dates.now()
+
+    #
     # ####### Including Equations #############
     #
 
@@ -176,7 +187,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     elmod_dunkelflaute = 0, switch_raw_results = NoRawResult(), switch_processed_results = 0, write_reduced_timeserie = 1, load_reduced_timeserie = 0, switch_LCOE_calc=0,
     switch_reserve=0,switch_base_year_bounds_debugging=0,
     switch_power_only_mode=0, allfuels_data_file="",
-    switch_endogenous_specifieddemandforecasting=0, switch_results_db=1,
+    switch_endogenous_specifieddemandforecasting=0, switch_results_db=1, switch_errorcheck=1,
     extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1, solver_log=true, solver_attr=Dict(),
     switch_test_data_load=0)
 
@@ -209,7 +220,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     switch_reserve=switch_reserve,
     switch_power_only_mode=switch_power_only_mode, allfuels_data_file=allfuels_data_file,
     switch_endogenous_specifieddemandforecasting=switch_endogenous_specifieddemandforecasting,
-    switch_results_db=switch_results_db,
+    switch_results_db=switch_results_db, switch_errorcheck=switch_errorcheck,
     extr_str_results = extr_str_results, extr_str_dispatch=extr_str_dispatch,
     switch_iis=switch_iis);
     t_build_end = Dates.now()

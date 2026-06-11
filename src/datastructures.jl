@@ -790,6 +790,12 @@ run that will be read to fix some decision variables.\n
   `genesysmod_results_db.duckdb` in the result directory. Tables are keyed by a
   `Scenario` column = `extr_str_results`: re-running a scenario overwrites exactly its
   rows, a new scenario name appends.\n
+- **`switch_errorcheck ::Int8`** Input-data error checks (port of
+  genesysmod_errorcheck.gms), run after bounds/scenariodata like the GAMS include
+  order. Checks: missing sector tags, OperationalLife, CapacityToActivityUnit,
+  CapacityFactor, trade inconsistencies, ModalSplit sums > 1, efficiency warnings.
+  0 = skip; 1 (default) = report offenders but continue; 2 = strict GAMS behaviour,
+  abort on hard errors.\n
 """
 struct Switch <: InputClass
     StartYear :: Int16
@@ -847,6 +853,7 @@ struct Switch <: InputClass
     allfuels_data_file ::String
     switch_endogenous_specifieddemandforecasting ::Int8
     switch_results_db ::Int8
+    switch_errorcheck ::Int8
 end
 
 """
