@@ -108,6 +108,30 @@ function _db_connect(path::AbstractString)
     end
 end
 
+"""
+    release_dbs()
+
+Close all DuckDB handles held by this Julia process (results + input-data
+databases). Closing checkpoints the .wal into the main file and releases the
+file lock, so the .duckdb can be opened in DBeaver etc. without ending the
+Julia session. Called automatically at the end of a model run; safe to call
+manually any time — the next write simply reopens the file.
+"""
+function release_dbs()
+    for (path, db) in collect(_DB_HANDLES)
+        try
+            DBInterface.close!(db)
+        catch e
+            @warn "Could not close database handle" path exception=e
+        end
+        delete!(_DB_HANDLES, path)
+    end
+    # Query-result finalizers may still hold references into the database;
+    # collect them so the file lock is actually dropped.
+    GC.gc()
+    return
+end
+
 _quote_ident(s) = "\"" * replace(string(s), "\"" => "\"\"") * "\""
 
 _table_exists(con, table) =

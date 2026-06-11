@@ -293,6 +293,9 @@ function genesysmod_dispatch(;elmod_nthhour = 1, elmod_starthour = 1, solver, DN
         println("Termination status:", termination_status(model), ".")
     end
 
+    # Checkpoint the .wal and free the DuckDB file locks for external readers.
+    release_dbs()
+
     return model, Dict("Sets" => Sets, "Params" => Params, "Switch" => switch)
 end
 

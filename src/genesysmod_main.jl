@@ -240,6 +240,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     if switch_test_data_load == 1
         println("switch_test_data_load active: dumping input data to DuckDB, skipping solve.")
         dump_inputs_db(case, switch)
+        release_dbs()
         return model, case
     end
 
@@ -352,6 +353,10 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     else
         println("Termination status:", termination_status(model), ".")
     end
+
+    # Release the DuckDB handles: checkpoints the .wal and frees the file
+    # lock so the databases can be opened externally without ending Julia.
+    release_dbs()
 
     t_results_end = Dates.now()
     build_ms   = Dates.value(t_build_end   - starttime)
