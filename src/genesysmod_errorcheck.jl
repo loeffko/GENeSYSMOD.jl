@@ -25,9 +25,10 @@ Warnings (printed, run continues):
 
 `Switch.switch_errorcheck`:
   0 = skip all checks
-  1 = run and REPORT everything, but continue (default — some legacy/test
-      datasets have known gaps that the model tolerates, e.g. zero-CF techs)
-  2 = strict GAMS behaviour: abort the run when a hard check fails
+  1 = run and REPORT everything, but continue (escape hatch for datasets
+      with known gaps that the model tolerates)
+  2 = GAMS behaviour (default): abort the run when a hard check fails,
+      warnings never abort
 """
 function genesysmod_errorcheck(Sets, Params, Switch)
     Switch.switch_errorcheck != 0 || return

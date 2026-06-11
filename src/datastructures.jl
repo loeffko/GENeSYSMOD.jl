@@ -792,10 +792,11 @@ run that will be read to fix some decision variables.\n
   rows, a new scenario name appends.\n
 - **`switch_errorcheck ::Int8`** Input-data error checks (port of
   genesysmod_errorcheck.gms), run after bounds/scenariodata like the GAMS include
-  order. Checks: missing sector tags, OperationalLife, CapacityToActivityUnit,
-  CapacityFactor, trade inconsistencies, ModalSplit sums > 1, efficiency warnings.
-  0 = skip; 1 (default) = report offenders but continue; 2 = strict GAMS behaviour,
-  abort on hard errors.\n
+  order. Hard checks (missing sector tags, OperationalLife, CapacityToActivityUnit,
+  CapacityFactor, trade inconsistencies, ModalSplit sums > 1) abort the run; soft
+  checks (missing AvailabilityFactor, efficiency > 1) only warn — same split as in
+  GAMS. 0 = skip; 1 = downgrade hard errors to reports and continue;
+  2 (default) = GAMS behaviour, abort on hard errors.\n
 """
 struct Switch <: InputClass
     StartYear :: Int16
