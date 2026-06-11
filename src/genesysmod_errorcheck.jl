@@ -43,8 +43,10 @@ function genesysmod_errorcheck(Sets, Params, Switch)
     𝓢𝓮 = Sets.Sector
 
     nerrors = 0
-    # print at most this many offenders per check; the count is always exact
+    # log shows at most this many offenders per check; the file gets all of
+    # them (Errorcheck_<nthhour>_<date>.txt in the result dir, like the IIS)
     maxshow = 20
+    findings = String[]
     function report!(kind, name, offenders, msg)
         isempty(offenders) && return
         shown = first(offenders, maxshow)
@@ -54,6 +56,9 @@ function genesysmod_errorcheck(Sets, Params, Switch)
         else
             @warn "$(name): $(msg)" offenders=shown total=length(offenders)
         end
+        push!(findings,
+            "[$(kind === :error ? "ERROR" : "WARNING")] $(name): $(msg) ($(length(offenders)) offender(s))\n" *
+            join(("  " * string(o) for o in offenders), "\n"))
     end
 
     dummy_techs = Set(get(Params.Tags.TagTechnologyToSubsets, "DummyTechnology", String[]))
@@ -146,6 +151,21 @@ function genesysmod_errorcheck(Sets, Params, Switch)
     end
     report!(:warn, "TechnologyEfficiencies", off,
         "Technology efficiency above 1 (input sum < output sum) outside Resources/Transportation.")
+
+    # Full offender lists to file, IIS-style naming, before any abort
+    if !isempty(findings)
+        fn = joinpath(Switch.resultdir[], "Errorcheck_$(Switch.elmod_nthhour)_$(today()).txt")
+        open(fn, "w") do f
+            println(f, "genesysmod_errorcheck — $(Dates.now())")
+            println(f, "model_region=$(Switch.model_region) pathway=$(Switch.emissionPathway) scenario=$(Switch.emissionScenario)")
+            println(f, "="^80)
+            for block in findings
+                println(f, block)
+                println(f)
+            end
+        end
+        println("Build:   errorcheck : findings written to $(fn)")
+    end
 
     if nerrors > 0
         if Switch.switch_errorcheck == 2
