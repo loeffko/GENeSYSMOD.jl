@@ -247,7 +247,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     # switch_dump_input_data: same input dump as switch_test_data_load
     # (genesysmod_inputdata_db.duckdb), but the run continues into the solve.
     if switch_dump_input_data == 1
-        dump_inputs_db(case, switch)
+        _db_attempt(() -> dump_inputs_db(case, switch), "input data dump")
     end
 
     #
@@ -350,7 +350,8 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         if switch.switch_results_db == 1
             # purge the scenario across ALL tables once, so a re-run that
             # writes fewer tables leaves no stale rows of this scenario
-            db_purge_scenario(switch, switch.extr_str_results)
+            _db_attempt(() -> db_purge_scenario(switch, switch.extr_str_results),
+                "scenario purge '$(switch.extr_str_results)'")
         end
         if switch_processed_results == 1 || switch.switch_results_db == 1
             genesysmod_results(model, Sets, Params, VarPar, Vars, switch,
@@ -360,7 +361,8 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         genesysmod_results_raw(model, VarPar, Params, Sets, switch,switch.extr_str_results, switch.switch_raw_results)
         println("  Results: raw : ", Dates.now()-_tr); _tr = Dates.now()
         if switch.switch_results_db == 1
-            write_raw_results_db(model, VarPar, Params, Sets, switch, switch.extr_str_results)
+            _db_attempt(() -> write_raw_results_db(model, VarPar, Params, Sets, switch, switch.extr_str_results),
+                "raw results (scenario '$(switch.extr_str_results)')")
             println("  Results: db : ", Dates.now()-_tr); _tr = Dates.now()
         end
         genesysmod_getspecifiedduals(model,switch,switch.extr_str_results, considered_duals)

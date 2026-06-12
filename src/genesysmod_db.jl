@@ -168,6 +168,65 @@ function _db_write_scenario!(con, table, df::DataFrame, scenario::AbstractString
 end
 
 """
+Pending database writes that failed because the file was locked by an
+external program (Tableau, DBeaver, ...). Each entry is a label plus a
+closure that re-executes the full write. Flushed via `retry_db_writes()`.
+"""
+const _PENDING_DB_WRITES = Vector{Pair{String,Function}}()
+
+"""
+Run a database write; if it fails (typically: file locked by an external
+reader), queue it for `retry_db_writes()` and continue the run instead of
+crashing — the solve result and all CSV outputs are unaffected.
+"""
+function _db_attempt(f::Function, label::AbstractString)
+    try
+        f()
+    catch e
+        push!(_PENDING_DB_WRITES, String(label) => f)
+        @warn """Could not write to the DuckDB database — it is most likely locked by another
+program (Tableau, DBeaver, a second Julia session, ...).
+The model run CONTINUES and all CSV outputs are unaffected.
+=> Close the program that holds the file open, then call `retry_db_writes()`
+   in this Julia session to write the queued results.""" write=label exception=e
+    end
+    return
+end
+
+"""
+    retry_db_writes()
+
+Re-attempt every database write that failed earlier in this session (file
+locked by Tableau/DBeaver/...). Writes are replayed in their original order;
+anything that fails again stays in the queue. Call after closing the program
+that held the database file open.
+"""
+function retry_db_writes()
+    if isempty(_PENDING_DB_WRITES)
+        println("No pending database writes.")
+        return
+    end
+    pending = copy(_PENDING_DB_WRITES)
+    empty!(_PENDING_DB_WRITES)
+    for (label, f) in pending
+        try
+            f()
+            println("  written: $(label)")
+        catch e
+            push!(_PENDING_DB_WRITES, label => f)
+            @warn "Still cannot write '$(label)' — is the database file still open elsewhere? Queue kept; close the file and call retry_db_writes() again." exception=e
+        end
+    end
+    if isempty(_PENDING_DB_WRITES)
+        release_dbs()
+        println("All queued database writes completed; database handles released.")
+    else
+        println("$(length(_PENDING_DB_WRITES)) write(s) still pending.")
+    end
+    return
+end
+
+"""
 Purge a scenario from EVERY table of the results database that carries a
 `Scenario` column. Called once at the start of a run's DB phase: the
 per-table DELETE in `_db_write_scenario!` only covers tables the new run

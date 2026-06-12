@@ -283,7 +283,8 @@ function genesysmod_dispatch(;elmod_nthhour = 1, elmod_starthour = 1, solver, DN
         # CSVs gated by switch_processed_results, database by switch_results_db
         # (gating inside genesysmod_results); purge once before any db writes.
         if switch.switch_results_db == 1
-            db_purge_scenario(switch, switch.extr_str_dispatch)
+            _db_attempt(() -> db_purge_scenario(switch, switch.extr_str_dispatch),
+                "scenario purge '$(switch.extr_str_dispatch)'")
         end
         if switch_processed_results == 1 || switch.switch_results_db == 1
             genesysmod_results(model, Sets, Params, VarPar, Vars, switch,
@@ -291,7 +292,8 @@ function genesysmod_dispatch(;elmod_nthhour = 1, elmod_starthour = 1, solver, DN
         end
         genesysmod_results_raw(model, VarPar, Params, Sets, switch,switch.extr_str_dispatch,switch.switch_raw_results)
         if switch.switch_results_db == 1
-            write_raw_results_db(model, VarPar, Params, Sets, switch, switch.extr_str_dispatch)
+            _db_attempt(() -> write_raw_results_db(model, VarPar, Params, Sets, switch, switch.extr_str_dispatch),
+                "raw results (scenario '$(switch.extr_str_dispatch)')")
         end
         genesysmod_getspecifiedduals(model,switch,switch.extr_str_dispatch, considered_duals)
     else

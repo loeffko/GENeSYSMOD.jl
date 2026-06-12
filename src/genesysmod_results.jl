@@ -1063,7 +1063,9 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
     end
 
     if Switch.switch_results_db == 1
-        write_processed_results_db(processed_tables, Sets, Switch, extr_str)
-        println("Processed results written to $(_results_db_path(Switch)) (scenario '$(extr_str)')")
+        _db_attempt("processed results (scenario '$(extr_str)')") do
+            write_processed_results_db(processed_tables, Sets, Switch, extr_str)
+            println("Processed results written to $(_results_db_path(Switch)) (scenario '$(extr_str)')")
+        end
     end
 end

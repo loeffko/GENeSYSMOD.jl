@@ -51,6 +51,6 @@ export NoInfeasibilityTechs, WithInfeasibilityTechs # for use with the switch in
 export OneNodeSimple, TwoNodes, OneNodeStorage
 export NoRawResult, CSVResult, TXTResult, TXTandCSV
 export update_and_process_data, fetch_data_release
-export release_dbs
+export release_dbs, retry_db_writes
 
 end
