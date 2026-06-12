@@ -785,7 +785,7 @@ run that will be read to fix some decision variables.\n
   SpecifiedDemandDevelopment (legacy OSeMOSYS-style growth). If 0 (default), the per-year
   values read from `Par_SpecifiedAnnualDemand` are used directly, so each year reflects
   the input data instead of being derived from year 1.\n
-- **`switch_results_db ::Int8`** If 1 (default), all outputs (processed result tables,
+- **`switch_results_db ::Int8`** If 1 (default 0), all outputs (processed result tables,
   raw variables, VarPar intermediates) are written to a single DuckDB file
   `genesysmod_results_db.duckdb` in the result directory — independent of the CSV
   switches (`switch_processed_results` gates only the CSV files). Tables are keyed by
