@@ -128,11 +128,15 @@ function create_daa(in_data::XLSX.XLSXFile, tab_name, els...;inherit_base_world=
     A = JuMP.Containers.DenseAxisArray(
         zeros(length.(els)...), els...)
     # Fill in values from Excel; membership pre-check instead of try/catch so
-    # out-of-set rows don't pay exception-unwind cost on every miss
+    # out-of-set rows don't pay exception-unwind cost on every miss. Rows with
+    # a missing Value or missing key cells are skipped — the former try/catch
+    # swallowed those silently, so this keeps the same semantics.
     axsets = map(Set, els)
     for r in eachrow(df)
-        if all(i -> r[i] ∈ axsets[i], eachindex(axsets))
-            A[r[1:end-1]...] = r.Value
+        val = r.Value
+        ismissing(val) && continue
+        if all(i -> coalesce(r[i] ∈ axsets[i], false), eachindex(axsets))
+            A[r[1:end-1]...] = val
         end
     end
     # Fill other values using base region / World, operating on .data slices
@@ -196,11 +200,14 @@ function create_daa(in_data::DataFrame, tab_name, els...) # els contains the Set
     # Initialize all combinations to zero:
     A = JuMP.Containers.DenseAxisArray(
         zeros(length.(els)...), els...)
-    # Fill in values from Excel; membership pre-check instead of try/catch
+    # Fill in values from Excel; membership pre-check instead of try/catch.
+    # Missing value / missing key cells are skipped (old try/catch parity).
     axsets = map(Set, els)
     for r in eachrow(df)
-        if all(i -> r[i] ∈ axsets[i], eachindex(axsets))
-            A[r[1:end-1]...] = r.y
+        val = r.y
+        ismissing(val) && continue
+        if all(i -> coalesce(r[i] ∈ axsets[i], false), eachindex(axsets))
+            A[r[1:end-1]...] = val
         end
     end
     return A
@@ -214,11 +221,14 @@ function create_daa_init(in_data, tab_name,init_value=0, els...;inherit_base_wor
     # Initialize all combinations to zero:
     A = JuMP.Containers.DenseAxisArray(
         ones(length.(els)...)*init_value, els...)
-    # Fill in values from Excel; membership pre-check instead of try/catch
+    # Fill in values from Excel; membership pre-check instead of try/catch.
+    # Missing Value / missing key cells are skipped (old try/catch parity).
     axsets = map(Set, els)
     for r in eachrow(df)
-        if all(i -> r[i] ∈ axsets[i], eachindex(axsets))
-            A[r[1:end-1]...] = r.Value
+        val = r.Value
+        ismissing(val) && continue
+        if all(i -> coalesce(r[i] ∈ axsets[i], false), eachindex(axsets))
+            A[r[1:end-1]...] = val
         end
     end
     # Fill other values using base region / World (sentinel = init_value)
