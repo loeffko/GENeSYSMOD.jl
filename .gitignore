@@ -1,4 +1,6 @@
 docs/build/
+.CondaPkg/
+.vscode/
 test/script.jl
 test/TestData/Results
 debug_scripts
@@ -15,3 +17,4 @@ iis.txt
 *.attr
 *.prm
 *.lock
+*.duckdb
