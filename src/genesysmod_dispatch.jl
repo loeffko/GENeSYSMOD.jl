@@ -280,7 +280,12 @@ function genesysmod_dispatch(;elmod_nthhour = 1, elmod_starthour = 1, solver, DN
 
     elseif termination_status(model) == MOI.OPTIMAL
         VarPar = genesysmod_variable_parameter(model, Sets, Params, Vars, Maps)
-        if switch_processed_results == 1
+        # CSVs gated by switch_processed_results, database by switch_results_db
+        # (gating inside genesysmod_results); purge once before any db writes.
+        if switch.switch_results_db == 1
+            db_purge_scenario(switch, switch.extr_str_dispatch)
+        end
+        if switch_processed_results == 1 || switch.switch_results_db == 1
             genesysmod_results(model, Sets, Params, VarPar, Vars, switch,
              Settings, Maps, elapsed,switch.extr_str_dispatch)
         end

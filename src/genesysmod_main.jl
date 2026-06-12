@@ -189,7 +189,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     switch_power_only_mode=0, allfuels_data_file="",
     switch_endogenous_specifieddemandforecasting=0, switch_results_db=1, switch_errorcheck=2,
     extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1, solver_log=true, solver_attr=Dict(),
-    switch_test_data_load=0)
+    switch_test_data_load=0, switch_dump_input_data=0)
 
     starttime = Dates.now()
 
@@ -242,6 +242,12 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         dump_inputs_db(case, switch)
         release_dbs()
         return model, case
+    end
+
+    # switch_dump_input_data: same input dump as switch_test_data_load
+    # (genesysmod_inputdata_db.duckdb), but the run continues into the solve.
+    if switch_dump_input_data == 1
+        dump_inputs_db(case, switch)
     end
 
     #
@@ -337,7 +343,16 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         _tr = Dates.now()
         VarPar = genesysmod_variable_parameter(model, Sets, Params, Vars,Maps)
         println("  Results: variable_parameter : ", Dates.now()-_tr); _tr = Dates.now()
-        if switch_processed_results == 1
+        # Switch semantics: switch_processed_results controls the CSV files,
+        # switch_results_db controls the database — independently. The
+        # processed tables are computed when either consumer wants them
+        # (CSV/DB gating happens inside genesysmod_results).
+        if switch.switch_results_db == 1
+            # purge the scenario across ALL tables once, so a re-run that
+            # writes fewer tables leaves no stale rows of this scenario
+            db_purge_scenario(switch, switch.extr_str_results)
+        end
+        if switch_processed_results == 1 || switch.switch_results_db == 1
             genesysmod_results(model, Sets, Params, VarPar, Vars, switch,
              Settings, Maps, elapsed, switch.extr_str_results)
             println("  Results: processed : ", Dates.now()-_tr); _tr = Dates.now()

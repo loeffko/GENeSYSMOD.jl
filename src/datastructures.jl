@@ -786,10 +786,12 @@ run that will be read to fix some decision variables.\n
   values read from `Par_SpecifiedAnnualDemand` are used directly, so each year reflects
   the input data instead of being derived from year 1.\n
 - **`switch_results_db ::Int8`** If 1 (default), all outputs (processed result tables,
-  raw variables, VarPar intermediates) are additionally written to a single DuckDB file
-  `genesysmod_results_db.duckdb` in the result directory. Tables are keyed by a
-  `Scenario` column = `extr_str_results`: re-running a scenario overwrites exactly its
-  rows, a new scenario name appends.\n
+  raw variables, VarPar intermediates) are written to a single DuckDB file
+  `genesysmod_results_db.duckdb` in the result directory — independent of the CSV
+  switches (`switch_processed_results` gates only the CSV files). Tables are keyed by
+  a `Scenario` column = `extr_str_results`: re-running a scenario first purges its rows
+  from every table (so runs writing fewer tables leave no stale rows), a new scenario
+  name appends.\n
 - **`switch_errorcheck ::Int8`** Input-data error checks (port of
   genesysmod_errorcheck.gms), run after bounds/scenariodata like the GAMS include
   order. Hard checks (missing sector tags, OperationalLife, CapacityToActivityUnit,

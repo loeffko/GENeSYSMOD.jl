@@ -168,6 +168,30 @@ function _db_write_scenario!(con, table, df::DataFrame, scenario::AbstractString
 end
 
 """
+Purge a scenario from EVERY table of the results database that carries a
+`Scenario` column. Called once at the start of a run's DB phase: the
+per-table DELETE in `_db_write_scenario!` only covers tables the new run
+writes again — a re-run writing fewer tables (different switches, power-only
+vs all-fuels variable sets, ...) would otherwise leave stale rows of the
+same scenario behind in the untouched tables.
+"""
+function db_purge_scenario(Switch, extr_str)
+    path = _results_db_path(Switch)
+    isfile(path) || haskey(_DB_HANDLES, abspath(path)) || return
+    con = _db_connect(path)
+    tables = DataFrame(DBInterface.execute(con,
+        "SELECT DISTINCT table_name FROM information_schema.columns " *
+        "WHERE column_name = 'Scenario' AND table_schema = 'main'"))
+    for t in tables.table_name
+        DBInterface.execute(con,
+            "DELETE FROM $(_quote_ident(t)) WHERE Scenario = ?", [String(extr_str)])
+    end
+    isempty(tables.table_name) ||
+        println("  Results: db purged scenario '$(extr_str)' from $(length(tables.table_name)) tables")
+    return
+end
+
+"""
 Add the scenario/context key columns in front of a result DataFrame. Columns
 the table already carries (e.g. `PathwayScenario` in the processed outputs)
 are left untouched.
