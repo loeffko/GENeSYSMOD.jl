@@ -30,6 +30,11 @@ Hard checks (model aborts, like the GAMS `abort`):
      active storage without OperationalLifeStorage
  14. Negative values in physically nonnegative parameters (costs,
      capacities, demands, factors, lifetimes)
+ 24. Base-year group-capacity cone: for every (tech subset, region subset)
+     with a binding GroupTotalAnnualMin/MaxCapacity in the start year, the
+     summed ResidualCapacity must lie inside [GroupMin, GroupMax] — new
+     builds are typically fixed to 0 in the start year, so a residual fleet
+     outside the cone is hard-infeasible
 
 Warnings (printed, run continues):
  15. AvailabilityFactor missing although ResidualCapacity is set
@@ -266,6 +271,29 @@ function genesysmod_errorcheck(Sets, Params, Switch)
     end
     report!(:error, "NegativeValues", off,
         "Negative entries in physically nonnegative parameters (parameter, count, most negative value).")
+
+    # 24 — Base-year group-capacity cone vs residual fleet
+    gmax = Params.GroupTotalAnnualMaxCapacity
+    gmin = Params.GroupTotalAnnualMinCapacity
+    y0 = Switch.StartYear ∈ collect(axes(gmax)[3]) ? Switch.StartYear : first(𝓨)
+    off = Tuple{String,String,Int,String}[]
+    for ts ∈ axes(gmax)[1], rs ∈ axes(gmax)[2]
+        techs = intersect(get(Params.Tags.TagTechnologyToSubsets, ts, String[]), 𝓣)
+        regs  = intersect(get(Params.Tags.TagRegionToSubsets, rs, String[]), 𝓡)
+        (isempty(techs) || isempty(regs)) && continue
+        tot = sum(Params.ResidualCapacity[r,t,y0] for r ∈ regs for t ∈ techs)
+        mn, mx = gmin[ts,rs,y0], gmax[ts,rs,y0]
+        if mn > 0 && tot < mn
+            push!(off, (string(ts), string(rs), Int(y0),
+                "residual $(round(tot, digits=4)) < GroupMin $(mn)"))
+        end
+        if mx < 999999 && tot > mx
+            push!(off, (string(ts), string(rs), Int(y0),
+                "residual $(round(tot, digits=4)) > GroupMax $(mx)"))
+        end
+    end
+    report!(:error, "BaseYearGroupCapacityCone", off,
+        "Summed ResidualCapacity in the start year falls outside the group capacity cone — hard-infeasible since start-year new builds are fixed to 0.")
 
     # 15 — WARNING: AvailabilityFactor missing although ResidualCapacity set
     off = [(r, t, y) for r ∈ 𝓡 for t ∈ 𝓣 for y ∈ 𝓨
