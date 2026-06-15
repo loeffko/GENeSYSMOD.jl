@@ -53,6 +53,12 @@ Warnings (printed, run continues):
      input or output activity ratio anywhere
  23. Switch/data mismatches (switch_reserve on but ReserveMargin all zero;
      employment calculation on but no employment data file)
+ 25. Cost year-gaps: a cost parameter (CapitalCost, FixedCost,
+     CapitalCostStorage) nonzero in some modelled years but zero in an
+     intermediate year. create_daa does not interpolate, so a milestone-only
+     series (values at 2025/30/35/40 only) is silently zero in the in-between
+     years — i.e. free to build there. This let the NA model build ~free Redox
+     storage; the cost series must cover every modelled year.
 
 `Switch.switch_errorcheck`:
   0 = skip all checks
@@ -399,6 +405,29 @@ function genesysmod_errorcheck(Sets, Params, Switch)
     end
     report!(:warn, "SwitchDataMismatch", off,
         "A switch is enabled but the data it needs is missing.")
+
+    # 25 — WARNING: cost parameter year-gaps (interior zero between nonzero
+    #      years). create_daa does not interpolate, so a milestone-only cost
+    #      series (e.g. values at 2025/30/35/40 only) is silently zero in the
+    #      in-between modelled years — i.e. free to build/run there. This is
+    #      what let the NA model build ~free Redox storage (D_ capex defined
+    #      only at 5-year steps).
+    off = Tuple{Symbol,String,String,Int}[]
+    function flag_cost_year_gaps!(pname, daa, items)
+        for r ∈ 𝓡, it ∈ items
+            nz = [y for y ∈ 𝓨 if daa[r,it,y] != 0]
+            length(nz) >= 2 || continue
+            lo, hi = first(nz), last(nz)   # 𝓨 is sorted ascending
+            for y ∈ 𝓨
+                lo < y < hi && daa[r,it,y] == 0 && push!(off, (pname, r, it, y))
+            end
+        end
+    end
+    flag_cost_year_gaps!(:CapitalCost, Params.CapitalCost, 𝓣)
+    flag_cost_year_gaps!(:FixedCost, Params.FixedCost, 𝓣)
+    flag_cost_year_gaps!(:CapitalCostStorage, Params.CapitalCostStorage, Sets.Storage)
+    report!(:warn, "CostYearGap", off,
+        "A cost parameter is nonzero in some modelled years but zero in an intermediate year — create_daa does not interpolate, so the technology is effectively free to build in the gap years. Add the missing per-year rows / interpolate the cost series.")
 
     # Full offender lists to file, IIS-style naming, before any abort
     if !isempty(findings)
