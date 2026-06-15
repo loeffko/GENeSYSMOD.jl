@@ -334,11 +334,20 @@ function genesysmod_bounds(model,Sets,Params, Vars,Settings,Switch,Maps)
         end
     end end end
 
+    # Storage cyclic reset: fix StorageLevelTSStart=0 at window boundaries so a
+    # storage must return to empty each window. BESS + heat tanks cycle daily
+    # (24h); LDES (CAES, Redox-Flow) cycle over 72h; PHS is fully seasonal
+    # (no reset -> deliberately absent). Window hours are converted to timeslice
+    # positions via elmod_hourstep (literal hours at hourly resolution;
+    # proportional otherwise, so LDES always cycles 3x longer than BESS).
+    storage_reset_h = Dict("S_Battery_Li-Ion" => 24, "S_Heat_HB_Tank_Small" => 24,
+        "S_Heat_HLI_Tank_Large" => 24, "S_CAES" => 72, "S_Battery_Redox" => 72)
 
     for r ∈ Sets.Region_full for i ∈ 1:length(Sets.Timeslice) for y ∈ Sets.Year
         if Switch.switch_dispatch isa NoDispatch
-            for s in intersect(Sets.Storage, ["S_Battery_Li-Ion","S_Battery_Redox","S_Heat_HB_Tank_Small", "S_Heat_HLI_Tank_Large", "S_CAES"])
-                if (i-1 + Switch.elmod_starthour/Switch.elmod_hourstep) % (24/Switch.elmod_hourstep) == 0
+            for (s, win_h) in storage_reset_h
+                s ∈ Sets.Storage || continue
+                if (i-1 + Switch.elmod_starthour/Switch.elmod_hourstep) % (win_h/Switch.elmod_hourstep) == 0
                     JuMP.fix(Vars.StorageLevelTSStart[s,y,Sets.Timeslice[i],r], 0; force = true)
                 end
             end
