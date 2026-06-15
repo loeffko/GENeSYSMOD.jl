@@ -20,6 +20,10 @@ function genesysmod_settings(Sets, Params, socialdiscountrate)
     end
 
     InvestmentLimit = Float64(1.9)  #Freedom for investment choices to spread across periods. A value of 1 would mean equal share for each period.
+    # SC2 annual RE-addition cap = NewRESCapacity * TotalAnnualMaxCapacity (only
+    # active with switch_investLimit). Floored in equ.jl at the min-capacity
+    # increment so it never blocks a founded minimum even where the funnel keeps
+    # the max tight.
     NewRESCapacity = Float64(0.1)
     #ProductionGrowthLimit=JuMP.Containers.DenseAxisArray(zeros(length(Sets.Year), length(Sets.Fuel)), Sets.Year, Sets.Fuel)
     #= for y ∈ Sets.Year for f ∈ Sets.Fuel

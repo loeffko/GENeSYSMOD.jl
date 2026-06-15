@@ -649,8 +649,16 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
           for r ∈ 𝓡
             for t ∈ intersect(Sets.Technology, Params.Tags.TagTechnologyToSubsets["Renewables"])
                 if 𝓨[i] > 2025
+                    # SC2 must never cap below the new-build needed to stay on the
+                    # TotalAnnualMinCapacity path. The funnel keeps max tight (max
+                    # ~ min) so f*max alone can starve a steep founded min ->
+                    # infeasible under switch_investLimit. min_inc is a constant
+                    # from input params (min, residual); keeps the model linear.
+                    rr_y  = max(0.0, Params.TotalAnnualMinCapacity[r,t,𝓨[i]]   - Params.ResidualCapacity[r,t,𝓨[i]])
+                    rr_ym = max(0.0, Params.TotalAnnualMinCapacity[r,t,𝓨[i-1]] - Params.ResidualCapacity[r,t,𝓨[i-1]])
+                    min_inc = max(0.0, rr_y - rr_ym)
                     @constraint(model,
-                    Vars.NewCapacity[𝓨[i],t,r] <= YearlyDifferenceMultiplier(𝓨[i-1],Sets)*Settings.NewRESCapacity*Params.TotalAnnualMaxCapacity[r,t,𝓨[i]],
+                    Vars.NewCapacity[𝓨[i],t,r] <= max(YearlyDifferenceMultiplier(𝓨[i-1],Sets)*Settings.NewRESCapacity*Params.TotalAnnualMaxCapacity[r,t,𝓨[i]], min_inc),
                     base_name="SC2_LimitAnnualCapacityAdditions|$(𝓨[i])|$(r)|$(t)")
                 end
             end
