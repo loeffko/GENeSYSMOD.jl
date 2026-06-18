@@ -35,6 +35,12 @@ Hard checks (model aborts, like the GAMS `abort`):
      summed ResidualCapacity must lie inside [GroupMin, GroupMax] — new
      builds are typically fixed to 0 in the start year, so a residual fleet
      outside the cone is hard-infeasible
+ 26. Base-year production above max generation (only with
+     switch_base_year_bounds): RegionalBaseYearProduction in the start year
+     exceeds what the residual fleet can physically generate
+     (ResidualCapacity × AvailabilityFactor × CapacityFactor ×
+     CapacityToActivityUnit × OutputActivityRatio). With start-year new builds
+     fixed to 0 the BYB lower bound cannot be met — hard-infeasible
 
 Warnings (printed, run continues):
  15. AvailabilityFactor missing although ResidualCapacity is set
@@ -59,6 +65,10 @@ Warnings (printed, run continues):
      series (values at 2025/30/35/40 only) is silently zero in the in-between
      years — i.e. free to build there. This let the NA model build ~free Redox
      storage; the cost series must cover every modelled year.
+ 27. Base-year production above demand (only with switch_base_year_bounds):
+     summed RegionalBaseYearProduction in the start year exceeds
+     SpecifiedAnnualDemand for the fuel — only consistent with exports/trade or
+     curtailment, otherwise a data-entry mistake (warning, never aborts)
 
 `Switch.switch_errorcheck`:
   0 = skip all checks
@@ -428,6 +438,50 @@ function genesysmod_errorcheck(Sets, Params, Switch)
     flag_cost_year_gaps!(:CapitalCostStorage, Params.CapitalCostStorage, Sets.Storage)
     report!(:warn, "CostYearGap", off,
         "A cost parameter is nonzero in some modelled years but zero in an intermediate year — create_daa does not interpolate, so the technology is effectively free to build in the gap years. Add the missing per-year rows / interpolate the cost series.")
+
+    # 26 (HARD) + 27 (WARNING): base-year-production sanity. Only meaningful
+    #      with the BYB constraints active (switch_base_year_bounds == 1): then
+    #      ProductionByTechnologyAnnual is forced >= RegionalBaseYearProduction
+    #      *(1-BaseYearSlack). In the start year endogenous new builds are ~0,
+    #      so the residual fleet alone must satisfy that floor — hence a
+    #      start-year-only check (like 24); later years can build to comply.
+    if Switch.switch_base_year_bounds == 1
+        rbp = Params.RegionalBaseYearProduction
+        y0  = Switch.StartYear ∈ 𝓨 ? Switch.StartYear : first(𝓨)
+        # share of the year a unit can run at full load: Σ_l CF*YearSplit
+        flh(r, t) = sum(Params.CapacityFactor[r,t,l,y0] * Params.YearSplit[l,y0] for l ∈ 𝓛)
+        # ~ BaseYearSlack (0.035) + numerical headroom; keeps the abort conservative
+        slack = 0.05
+
+        # 26 — HARD: residual fleet cannot supply the forced base-year production.
+        # Max output of fuel f by tech t running flat out in its best mode.
+        off = Tuple{String,String,String,Float64,Float64}[]
+        for r ∈ 𝓡, t ∈ 𝓣, f ∈ 𝓕
+            rbp[r,t,f,y0] != 0 || continue
+            oar = maximum(Params.OutputActivityRatio[r,t,f,m,y0] for m ∈ 𝓜)
+            maxgen = Params.ResidualCapacity[r,t,y0] * Params.AvailabilityFactor[r,t,y0] *
+                     Params.CapacityToActivityUnit[t] * flh(r,t) * oar
+            if maxgen < rbp[r,t,f,y0] * (1 - slack)
+                push!(off, (r, t, f, round(maxgen, digits=4), round(rbp[r,t,f,y0], digits=4)))
+            end
+        end
+        report!(:error, "BaseYearProductionAboveMaxGen", off,
+            "RegionalBaseYearProduction in the start year exceeds the residual fleet's maximum generation " *
+            "(ResidualCapacity*AvailabilityFactor*CapacityFactor*CapacityToActivityUnit*OutputActivityRatio); " *
+            "with start-year new builds fixed to 0 the base-year lower bound is infeasible. (region, tech, fuel, maxgen, required)")
+
+        # 27 — WARNING: base-year production exceeds the demand it should serve.
+        off = Tuple{String,String,Float64,Float64}[]
+        for r ∈ 𝓡, f ∈ 𝓕
+            prod = sum(rbp[r,t,f,y0] for t ∈ 𝓣)
+            prod != 0 || continue
+            dem = Params.SpecifiedAnnualDemand[r,f,y0]
+            prod > dem && push!(off, (r, f, round(prod, digits=4), round(dem, digits=4)))
+        end
+        report!(:warn, "BaseYearProductionAboveDemand", off,
+            "Summed RegionalBaseYearProduction in the start year exceeds SpecifiedAnnualDemand for the fuel " *
+            "(only consistent with exports/trade or curtailment). (region, fuel, production, demand)")
+    end
 
     # Full offender lists to file, IIS-style naming, before any abort
     if !isempty(findings)
