@@ -665,6 +665,10 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
   ############### Investment & Capacity Limits / Smoothing Constraints #############
   if Switch.switch_dispatch isa NoDispatch
     if Switch.switch_investLimit == 1
+      # EGS is smoothed by the TCC5 group new-capacity cap, so SC2's %-of-max is
+      # redundant for it; use NewRESCapacity=1 (non-binding) so EGS does not put a
+      # 0.1*max (e.g. 7e-4 for tiny-resource regions) tiny RHS into the matrix.
+      egs_techs = Set(intersect(𝓣, get(Params.Tags.TagTechnologyToSubsets, "EGS", String[])))
       for i ∈ eachindex(𝓨)
         if 𝓨[i] > Switch.StartYear
           @constraint(model,
@@ -672,7 +676,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
           base_name="SC1_SpreadCapitalInvestmentsAcrossTime|$(𝓨[i])")
           for r ∈ 𝓡
             for t ∈ intersect(Sets.Technology, Params.Tags.TagTechnologyToSubsets["Renewables"])
-                if 𝓨[i] > 2025
+                if 𝓨[i] > 2025 && tech_alive(r,t,𝓨[i])   # skip forbidden (0.001-marker) techs: their f*max=1e-4 RHS just stretches conditioning
                     # SC2 must never cap below the new-build needed to stay on the
                     # TotalAnnualMinCapacity path. The funnel keeps max tight (max
                     # ~ min) so f*max alone can starve a steep founded min ->
@@ -682,7 +686,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
                     rr_ym = max(0.0, Params.TotalAnnualMinCapacity[r,t,𝓨[i-1]] - Params.ResidualCapacity[r,t,𝓨[i-1]])
                     min_inc = max(0.0, rr_y - rr_ym)
                     @constraint(model,
-                    Vars.NewCapacity[𝓨[i],t,r] <= max(YearlyDifferenceMultiplier(𝓨[i-1],Sets)*Settings.NewRESCapacity*Params.TotalAnnualMaxCapacity[r,t,𝓨[i]], min_inc),
+                    Vars.NewCapacity[𝓨[i],t,r] <= max(YearlyDifferenceMultiplier(𝓨[i-1],Sets)*(t ∈ egs_techs ? 1.0 : Settings.NewRESCapacity)*Params.TotalAnnualMaxCapacity[r,t,𝓨[i]], min_inc),
                     base_name="SC2_LimitAnnualCapacityAdditions|$(𝓨[i])|$(r)|$(t)")
                 end
             end
@@ -843,9 +847,14 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
 
   start=Dates.now()
   for y ∈ 𝓨 for t ∈ 𝓣 for r ∈ 𝓡
-    if (Params.TotalAnnualMaxCapacity[r,t,y] < 999999) && (Params.TotalAnnualMaxCapacity[r,t,y] > 0)
+    if (Params.TotalAnnualMaxCapacity[r,t,y] < 999999) && (Params.TotalAnnualMaxCapacity[r,t,y] > 0) && tech_alive(r,t,y)
       @constraint(model, Vars.TotalCapacityAnnual[y,t,r] <= Params.TotalAnnualMaxCapacity[r,t,y], base_name="TCC1_TotalAnnualMaxCapacityConstraint|$(y)|$(t)|$(r)")
-    elseif Params.TotalAnnualMaxCapacity[r,t,y] == 0
+    elseif (Params.TotalAnnualMaxCapacity[r,t,y] == 0) || !tech_alive(r,t,y)
+      # Fix forbidden techs to 0 instead of carrying a tiny <= 0.001 RHS: a max==0
+      # tech, or the 0.001 forbid-marker (with no residual and no forced minimum).
+      # Removes the conditioning floor + the near-zero result artifact; these techs
+      # are already production-gated (out of the LoopSets), so this only drops dead
+      # capacity. A 0.001 tech kept alive by residual/min stays above (tech_alive).
       JuMP.fix(Vars.TotalCapacityAnnual[y,t,r],0; force=true)
     end
 
