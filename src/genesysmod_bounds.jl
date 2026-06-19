@@ -236,8 +236,19 @@ function genesysmod_bounds(model,Sets,Params, Vars,Settings,Switch,Maps)
     if Switch.switch_ccs == 1
         for r ∈ Sets.Region_full for t ∈ intersect(Sets.Technology, Params.Tags.TagTechnologyToSubsets["CCS"])
             Params.AvailabilityFactor[r,t,:] .= 0
-            Params.TotalAnnualMaxCapacity[r,t,:] .= 999999
-            Params.TotalTechnologyAnnualActivityUpperLimit[r,t,:] .= 999999
+            for y ∈ Sets.Year
+                # Respect the data forbid-marker: a CCS tech the data caps at <= the
+                # 0.001 GW marker (written by the NA pipeline to forbid it) stays
+                # forbidden instead of being blanket-enabled to 999999. Without this,
+                # forbidding e.g. CHP_Coal_Lignite just pushes the build into its CCS
+                # twin (whack-a-mole). Techs left > marker -- incl. the classic
+                # max=0 -> 999999 from the FossilPower rule earlier in this file -- are
+                # enabled exactly as before, so non-NA datasets are unaffected.
+                if Params.TotalAnnualMaxCapacity[r,t,y] > 1.5e-3
+                    Params.TotalAnnualMaxCapacity[r,t,y] = 999999
+                    Params.TotalTechnologyAnnualActivityUpperLimit[r,t,y] = 999999
+                end
+            end
         end end
 
         for y ∈ Sets.Year for r ∈ Sets.Region_full
