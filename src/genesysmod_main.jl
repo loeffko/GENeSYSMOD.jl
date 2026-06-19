@@ -261,7 +261,8 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         #set_optimizer_attribute(model, "Names", "no")
         set_optimizer_attribute(model, "Method", 2)
         set_optimizer_attribute(model, "BarHomogeneous", 1)
-        set_optimizer_attribute(model, "Crossover", 1)
+        set_optimizer_attribute(model, "NumericFocus", 2)   # tighten numerics (large nuclear/coal coeffs push barrier off certified-optimal)
+        set_optimizer_attribute(model, "Crossover", 0)
         set_optimizer_attribute(model, "GURO_PAR_DUMP", 0)
         if solver_log
             set_optimizer_attribute(model, "LogFile", joinpath(resultdir,"Run_$(elmod_nthhour)_$(today()).log"))

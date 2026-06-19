@@ -47,6 +47,20 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
 
   LoopSetOutput = Dict()
   LoopSetInput = Dict()
+  # Drop only techs carrying the small POSITIVE forbid-marker: 0 < max <= EPS (the
+  # 0.001 GW ceiling the NA data pipeline writes to forbid a tech the 0->999999
+  # bounds rule would otherwise make unlimited) with no residual and no forced
+  # minimum. Such a tech can hold essentially no capacity, so it is dropped from the
+  # LoopSets (and Can* guards) to avoid generating dead constraint terms.
+  # A genuine max==0 (e.g. a non-tag tech simply unavailable in a region) is LEFT in
+  # place exactly as before -> GAMS keeps those forced-zero terms too, so non-NA MPS
+  # structure stays byte-identical (gate removes 0 entries there). Techs forbidden
+  # the classic way (raw max=0 -> bounds sets 999999) are also untouched (>EPS).
+  DEAD_CAP_EPS = 1.5e-3
+  tech_alive(r,t,y) = !(0.0 < Params.TotalAnnualMaxCapacity[r,t,y] <= DEAD_CAP_EPS &&
+                        Params.ResidualCapacity[r,t,y]             <= DEAD_CAP_EPS &&
+                        Params.TotalAnnualMinCapacity[r,t,y]       <= DEAD_CAP_EPS)
+  _loopset_raw = 0; _loopset_kept = 0
   for y ∈ 𝓨, f ∈ 𝓕, r ∈ 𝓡
       slice_out = Params.OutputActivityRatio[r,:,f,:,y]
       slice_in  = Params.InputActivityRatio[r,:,f,:,y]
@@ -58,10 +72,16 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
       in_i_labels = axes(slice_in, 1)
       in_j_labels = axes(slice_in, 2)
 
-      # Find positions where value > 0
-      LoopSetOutput[(r,f,y)] = [(out_i_labels[i[1]], out_j_labels[i[2]]) for i in findall(>(0), slice_out.data)]
-      LoopSetInput[(r,f,y)]  = [(in_i_labels[i[1]],  in_j_labels[i[2]])  for i in findall(>(0), slice_in.data)]
+      # Find positions where value > 0, keeping only techs that can hold capacity
+      out_pairs = [(out_i_labels[i[1]], out_j_labels[i[2]]) for i in findall(>(0), slice_out.data)]
+      in_pairs  = [(in_i_labels[i[1]],  in_j_labels[i[2]])  for i in findall(>(0), slice_in.data)]
+      _loopset_raw += length(out_pairs) + length(in_pairs)
+      LoopSetOutput[(r,f,y)] = [(t,m) for (t,m) ∈ out_pairs if tech_alive(r,t,y)]
+      LoopSetInput[(r,f,y)]  = [(t,m) for (t,m) ∈ in_pairs  if tech_alive(r,t,y)]
+      _loopset_kept += length(LoopSetOutput[(r,f,y)]) + length(LoopSetInput[(r,f,y)])
   end
+  print("LoopSet gate : kept ", _loopset_kept, " of ", _loopset_raw,
+        " (t,m) entries (removed ", _loopset_raw - _loopset_kept, ")\n")
 
   print("LoopSets : ",Dates.now()-start,"\n")
   start=Dates.now()
@@ -101,6 +121,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
                             if any(Params.TechnologyFromStorage[t,s,m,y] != 0 for y ∈ 𝓨)] for s ∈ 𝓢)
 
   function CanFuelBeUsedByModeByTech(y, f, r,t,m)
+    tech_alive(r,t,y) || return 0
     temp = Params.InputActivityRatio[r,t,f,m,y]*
     Params.TotalAnnualMaxCapacity[r,t,y] *
     SumCapacityFactor[r,t,y] *
@@ -115,6 +136,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
   end
 
   function CanFuelBeUsedByTech(y, f, r,t)
+    tech_alive(r,t,y) || return 0
     temp = sum(Params.InputActivityRatio[r,t,f,m,y]*
     Params.TotalAnnualMaxCapacity[r,t,y] *
     SumCapacityFactor[r,t,y] *
@@ -170,6 +192,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
   end end end
 
   function CanFuelBeProducedByTech(y, f, r,t)
+    tech_alive(r,t,y) || return 0
     temp = sum(Params.OutputActivityRatio[r,t,f,m,y]*
     Params.TotalAnnualMaxCapacity[r,t,y] *
     SumCapacityFactor[r,t,y] *
@@ -184,6 +207,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
   end
 
   function CanFuelBeProducedByModeByTech(y, f, r,t,m)
+    tech_alive(r,t,y) || return 0
     temp = Params.OutputActivityRatio[r,t,f,m,y]*
     Params.TotalAnnualMaxCapacity[r,t,y] *
     SumCapacityFactor[r,t,y] *
@@ -834,6 +858,10 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
   # over a technology subset (Tags.TagTechnologyToSubsets) intersected with a
   # region subset (Tags.TagRegionToSubsets), per year. Use 999999 sentinel for
   # "no upper limit" (matches TCC1 convention); 0 lower limit is inert.
+  # Investment-only: in dispatch all capacities are fixed and a region-restricted
+  # run (e.g. single-region OneNodeSimple) only covers part of a region subset,
+  # so a USA-wide group min would be spuriously infeasible.
+  if Switch.switch_dispatch isa NoDispatch
   for ts ∈ keys(Params.Tags.TagTechnologyToSubsets)
     techs_in_subset = intersect(Params.Tags.TagTechnologyToSubsets[ts], 𝓣)
     isempty(techs_in_subset) && continue
@@ -855,6 +883,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
         end
       end
     end
+  end
   end
   print("Cstr: Tot. Cap. : ",Dates.now()-start,"\n")
 
