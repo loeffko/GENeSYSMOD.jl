@@ -283,6 +283,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         set_optimizer_attribute(model, "primal_feasibility_tolerance", 1e-04)
         set_optimizer_attribute(model, "dual_feasibility_tolerance", 1e-04)
         set_optimizer_attribute(model, "pdlp_optimality_tolerance", 1e-04)
+        set_optimizer_attribute(model, "optimality_tolerance", 1e-04)
         # IIS strategy: bit2 (elastic IS) | bit8 (true IIS) = 10. Set here,
         # pre-solve, so it never dirties the model after optimize!. Consumed by
         # HiGHS native IIS; the MathOptIIS fallback used by current HiGHS.jl
