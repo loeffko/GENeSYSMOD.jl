@@ -208,15 +208,22 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
 
     has_route(r,rr) = ntc[r,rr] > 0
 
-    # --- dispatchable: upper bound (cap×AF×hours), must-run, fix-zero ---
+    # --- dispatchable: per-hour cap cap×CF (CF=1 for thermal, <1 for hydro etc.;
+    #     matches investment CA3b -> full nameplate available at the peak hour),
+    #     annual energy cap cap×CF×AF (matches CA5 -> AvailabilityFactor limits
+    #     yearly utilisation, NOT the peak hour), must-run, fix-zero.
+    #     (Earlier this derated every hour by AF, capping firm at 0.8×nameplate and
+    #     overstating scarcity vs the fleet the investment actually built.) ---
     for r ∈ 𝓡, d ∈ disp
         if cap[d,r] > 0 && af(r,d) > 0
             mar = get(DISP_MINACTIVITY, d, 0.0)
             for h ∈ H
-                capE = cap[d,r] * af(r,d) * dur(h)     # GWh available in timeslice h
+                capE = cap[d,r] * cf(r,d,h) * dur(h)   # GWh available in timeslice h
                 @constraint(model, g[r,d,h] <= capE)
                 mar > 0 && @constraint(model, g[r,d,h] >= mar * capE)
             end
+            @constraint(model, sum(g[r,d,h] for h ∈ H) <=
+                af(r,d) * sum(cap[d,r] * cf(r,d,h) * dur(h) for h ∈ H))
         else
             for h ∈ H; fix(g[r,d,h], 0.0; force=true); end
         end
@@ -358,6 +365,28 @@ function write_dispatch_year_db(dispatch_db, scenario, year, Switch, Sets, disp,
         f = value(V.flow[r,rr,h]); abs(f) > 1e-6 && push!(trd, (r, rr, Int(h), round(f, digits=4)))
     end
     put("dispatch_trade", trd)
+    # combined long table (GAMS `output`/`stor_oper`/`dual_price` merged into one) for
+    # easy charting: every quantity as (Category, Name, Value) per Region/Hour. Sign
+    # conventions mirror the GAMS output: charging (s_in) and curtailment (cur) negative.
+    comb = DataFrame(Region=String[], Hour=Int[], Category=String[], Name=String[], Value=Float64[])
+    for row ∈ eachrow(gen)                                   # generation (disp + var), nonzero
+        push!(comb, (row.Region, row.Hour, "prod", row.Technology, row.Value))
+    end
+    for row ∈ eachrow(sto)                                   # storage operation
+        push!(comb, (row.Region, row.Hour, "s_in",      row.Storage, round(-row.Charge, digits=4)))
+        push!(comb, (row.Region, row.Hour, "s_out",     row.Storage, row.Discharge))
+        push!(comb, (row.Region, row.Hour, "s_soc",     row.Storage, row.SoC))
+        push!(comb, (row.Region, row.Hour, "s_net_out", row.Storage, round(row.Discharge - row.Charge, digits=4)))
+    end
+    for row ∈ eachrow(bal)                                   # demand + price every hour; rest nonzero
+        push!(comb, (row.Region, row.Hour, "dem",   "Demand", row.Demand))
+        push!(comb, (row.Region, row.Hour, "price", "Price",  row.Price))
+        row.Curtailment != 0 && push!(comb, (row.Region, row.Hour, "cur",  "Curtailment",   round(-row.Curtailment, digits=4)))
+        row.Unserved    != 0 && push!(comb, (row.Region, row.Hour, "inf",  "Infeasibility", row.Unserved))
+        row.NetImport   != 0 && push!(comb, (row.Region, row.Hour, "flow", "NetImport",     row.NetImport))
+    end
+    put("dispatch_combined", comb)
+    println("  dispatch_combined: ", nrow(comb), " rows")
     return nrow(gen), nrow(sto), nrow(bal), nrow(trd)
 end
 
