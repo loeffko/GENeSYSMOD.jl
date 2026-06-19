@@ -456,8 +456,8 @@ function read_params(in_data, Sets, Switch, Tags)
     GroupTotalAnnualMinCapacity = "Par_GroupTotalAnnualMinCapacity" ∈ XLSX.sheetnames(in_data) ?
         create_daa(in_data, "Par_GroupTotalAnnualMinCapacity", 𝓣𝓼, 𝓡𝓼, 𝓨) :
         DenseArray(zeros(length(𝓣𝓼), length(𝓡𝓼), length(𝓨)), 𝓣𝓼, 𝓡𝓼, 𝓨)
-    GroupTotalAnnualMaxNewCapacity = "Par_GroupTotalAnnualMaxNewCapacity" ∈ XLSX.sheetnames(in_data) ?
-        create_daa_init(in_data, "Par_GroupTotalAnnualMaxNewCapacity", 999999, 𝓣𝓼, 𝓡𝓼, 𝓨) :
+    GroupTotalAnnualMaxNewCapacity = "Par_GroupTotalAnnualMaxNewCap" ∈ XLSX.sheetnames(in_data) ?
+        create_daa_init(in_data, "Par_GroupTotalAnnualMaxNewCap", 999999, 𝓣𝓼, 𝓡𝓼, 𝓨) :
         DenseArray(fill(999999.0, length(𝓣𝓼), length(𝓡𝓼), length(𝓨)), 𝓣𝓼, 𝓡𝓼, 𝓨)
     TotalTechnologyAnnualActivityUpperLimit = create_daa(in_data, "Par_TotalAnnualMaxActivity", 𝓡, 𝓣, 𝓨)
     TotalTechnologyAnnualActivityLowerLimit = create_daa(in_data, "Par_TotalAnnualMinActivity", 𝓡, 𝓣, 𝓨)
