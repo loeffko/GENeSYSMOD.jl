@@ -1038,12 +1038,16 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
     ####
 
     # GAMS parity (genesysmod_results.gms): every output value is rounded to
-    # 4 digits. Rounding BEFORE the != 0 filter also drops the e-09 noise rows
-    # that barrier runs without crossover produce.
+    # 4 digits. We then drop |value| <= 1.5e-3 (not just == 0): this clears the
+    # FORBID_EPS (0.001 GW) forbid-marker capacities AND the barrier interior-point
+    # noise (crossover-free runs leave ~1e-4 on true-zero variables) -- both are
+    # artifacts, not real builds. 1.5e-3 in GW/PJ/MEUR/Mt is sub-MW / negligible.
+    # (Matches the genesysmod_equ gate's DEAD_CAP_EPS, so what the model treats as
+    # dead also does not appear in results.) Flows to both CSV and the DuckDB.
     _round4(df) = begin
         out = copy(df)
         out.Value = round.(out.Value, digits=4)
-        out[out.Value .!= 0, :]
+        out[abs.(out.Value) .> 1.5e-3, :]
     end
     # Run configuration: every Switch field -> (Switch, Value), so the exact
     # setup of a run is recorded with the results. Not _round4-ed (string/mixed
