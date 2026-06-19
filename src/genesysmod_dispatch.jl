@@ -15,7 +15,7 @@ function genesysmod_build_model_dispatch(;elmod_nthhour = 1, elmod_starthour=1, 
         elmod_dunkelflaute = 0, switch_raw_results = CSVResult(), switch_processed_results = 1, switch_LCOE_calc=0,
         switch_dispatch = OneNodeSimple("DE"), extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",
         switch_base_year_bounds_debugging = 0, switch_reserve = 0, switch_iis=1,dispatch_week=nothing,
-        switch_results_db=0, switch_errorcheck=2)
+        switch_results_db=0, switch_errorcheck=2, switch_power_only_mode=0, allfuels_data_file="")
 
     elmod_daystep = elmod_nthhour ÷ 24
     elmod_hourstep = elmod_nthhour % 24
@@ -85,8 +85,8 @@ function genesysmod_build_model_dispatch(;elmod_nthhour = 1, elmod_starthour=1, 
     extr_str_results,
     extr_str_dispatch,
     switch_reserve,
-    0,      # switch_power_only_mode  (not used in dispatch runs)
-    "",     # allfuels_data_file
+    switch_power_only_mode,
+    allfuels_data_file,
     0,      # switch_endogenous_specifieddemandforecasting
     switch_results_db,
     switch_errorcheck)
@@ -99,6 +99,11 @@ function genesysmod_build_model_dispatch(;elmod_nthhour = 1, elmod_starthour=1, 
     #
 
     Sets, Params, Emp_Sets = genesysmod_dataload(switch;dispatch_week=dispatch_week);
+    # Power-only: bake the upstream fuel cost into thermal VariableCost (+ set the
+    # power OutputEmissionRatio) from the allFuels Excel, exactly as the investment
+    # build does. No-op when switch_power_only_mode == 0. Run on the full
+    # pre-aggregation Params so the considered region inherits the baked costs.
+    power_only_precompute!(Params, Sets, switch)
     Sets, Params, Region_full, Params_full = aggregate_params(switch, Sets, Params, switch.switch_dispatch);
 
     Maps = make_mapping(Sets,Params)
@@ -152,7 +157,8 @@ function genesysmod_dispatch(;elmod_nthhour = 1, elmod_starthour = 1, solver, DN
         switch_employment_calculation = 0, switch_endogenous_employment = 0, employment_data_file = "",
         elmod_dunkelflaute = 0, switch_raw_results = CSVResult(), switch_processed_results = 1, switch_LCOE_calc=0,
         switch_dispatch = OneNodeSimple("DE"), extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",
-        switch_base_year_bounds_debugging = 0, switch_reserve = 0, switch_iis=1, dispatch_week=nothing, solver_log=true, solver_attr=Dict())
+        switch_base_year_bounds_debugging = 0, switch_reserve = 0, switch_iis=1, dispatch_week=nothing, solver_log=true, solver_attr=Dict(),
+        switch_power_only_mode=0, allfuels_data_file="")
 
     starttime= Dates.now()
 
@@ -181,7 +187,8 @@ function genesysmod_dispatch(;elmod_nthhour = 1, elmod_starthour = 1, solver, DN
     switch_LCOE_calc=switch_LCOE_calc,
     switch_dispatch=switch_dispatch, switch_reserve = switch_reserve,
     extr_str_results = extr_str_results, extr_str_dispatch=extr_str_dispatch,
-    switch_iis=switch_iis,dispatch_week=dispatch_week);
+    switch_iis=switch_iis,dispatch_week=dispatch_week,
+    switch_power_only_mode=switch_power_only_mode, allfuels_data_file=allfuels_data_file);
     Sets = case["Sets"]
     Params = case["Params"]
     Vars = case["Vars"]
@@ -278,7 +285,9 @@ function genesysmod_dispatch(;elmod_nthhour = 1, elmod_starthour = 1, solver, DN
             error("Model infeasible. Turn on 'switch_iis' to compute and write the iis file")
         end
 
-    elseif termination_status(model) == MOI.OPTIMAL
+    elseif primal_status(model) == MOI.FEASIBLE_POINT   # feasible (incl. sub-optimal barrier), not only certified OPTIMAL
+        termination_status(model) == MOI.OPTIMAL ||
+            @warn "Solver did not certify optimality ($(termination_status(model))); writing dispatch results from the feasible solution."
         VarPar = genesysmod_variable_parameter(model, Sets, Params, Vars, Maps)
         # CSVs gated by switch_processed_results, database by switch_results_db
         # (gating inside genesysmod_results); purge once before any db writes.
@@ -526,7 +535,7 @@ function read_emissions(Sets, Switch, region_full, s_rawresults::CSVResult)
 end
 
 function read_emissions(Sets, Switch, s_rawresults::CSVResult)
-    in_data=CSV.read(joinpath(Switch.resultdir[], "TotalStorageCapacityAnnual_" * Switch.model_region * "_" * Switch.emissionPathway * "_" * Switch.emissionScenario * "_" *Switch.extr_str_results * ".csv"), DataFrame)
+    in_data=CSV.read(joinpath(Switch.resultdir[], "AnnualEmissions_" * Switch.model_region * "_" * Switch.emissionPathway * "_" * Switch.emissionScenario * "_" *Switch.extr_str_results * ".csv"), DataFrame)
     tmp_AnnualEmissions = create_daa(in_data, "", Sets.Year, Sets.Emission, Sets.Region_full)
     return tmp_AnnualEmissions
 end

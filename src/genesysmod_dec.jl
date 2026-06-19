@@ -128,7 +128,12 @@ function genesysmod_dec(model,Sets, Params,Switch, Maps)
 
 
     ######### Trade #############
-    imp_exp_sets = isempty(Maps.Set_Fuel_Regions) ? Set([(String("ETS"),String(𝓡[1]),String(𝓡[1]))]) : Maps.Set_Fuel_Regions # dummy to avoid type problems in dispatch if se is empty
+    # Dummy self-trade entry to keep the sparse trade variables typed (not
+    # SparseAxisArray{Any}) when there are no inter-region routes — e.g. a
+    # single-region OneNodeSimple dispatch. Must use a fuel that exists in 𝓕
+    # (the old "ETS" placeholder is absent in power-only/NA, so no index matched
+    # and the container stayed empty → convert error in the Variables struct).
+    imp_exp_sets = isempty(Maps.Set_Fuel_Regions) ? Set([(String(𝓕[1]),String(𝓡[1]),String(𝓡[1]))]) : Maps.Set_Fuel_Regions
     Import = @variable(model, Import[y=𝓨, l=𝓛, f=𝓕, r1=𝓡, r2=𝓡; (f,r1,r2) ∈ imp_exp_sets] >= 0)
     Export = @variable(model, Export[y=𝓨, l=𝓛, f=𝓕, r1=𝓡, r2=𝓡; (f,r1,r2) ∈ imp_exp_sets] >= 0)
     NewTradeCapacity = @variable(model, NewTradeCapacity[y=𝓨, f=𝓕, r1=𝓡, r2=𝓡; (f,r1,r2) ∈ imp_exp_sets] >= 0)
