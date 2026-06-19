@@ -327,6 +327,10 @@ struct Parameters <: InputClass
     # (TechSubset, RegionSubset, Year). Max defaults to 999999 (=no limit).
     GroupTotalAnnualMaxCapacity ::JuMP.Containers.DenseAxisArray
     GroupTotalAnnualMinCapacity ::JuMP.Containers.DenseAxisArray
+    # Aggregated upper limit on NewCapacity (annual capacity *additions*) summed over
+    # a technology subset × region subset, per year. 999999 = no limit. Smooths the
+    # build path of a tech group (e.g. EGS) via data, no per-tech/region hardcode.
+    GroupTotalAnnualMaxNewCapacity ::JuMP.Containers.DenseAxisArray
 
     AnnualSectoralEmissionLimit ::JuMP.Containers.DenseAxisArray
 

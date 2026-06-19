@@ -875,6 +875,15 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
               <= Params.GroupTotalAnnualMaxCapacity[ts,rs,y],
             base_name="TCC3_GroupMaxCapacityConstraint|$(y)|$(ts)|$(rs)")
         end
+        # TCC5: aggregated upper limit on NewCapacity (annual additions) summed over
+        # the same subset × region subset -> smooths a tech group's build path
+        # (e.g. EGS) from data, no per-tech/region hardcode. 999999 = no limit.
+        if Params.GroupTotalAnnualMaxNewCapacity[ts,rs,y] < 999999
+          @constraint(model,
+            sum(Vars.NewCapacity[y,t,r] for t ∈ techs_in_subset for r ∈ regs_in_subset)
+              <= Params.GroupTotalAnnualMaxNewCapacity[ts,rs,y],
+            base_name="TCC5_GroupMaxNewCapacityConstraint|$(y)|$(ts)|$(rs)")
+        end
         if Params.GroupTotalAnnualMinCapacity[ts,rs,y] > 0
           @constraint(model,
             sum(Vars.TotalCapacityAnnual[y,t,r] for t ∈ techs_in_subset for r ∈ regs_in_subset)
