@@ -261,7 +261,7 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         #set_optimizer_attribute(model, "Names", "no")
         set_optimizer_attribute(model, "Method", 2)
         set_optimizer_attribute(model, "BarHomogeneous", 1)
-        set_optimizer_attribute(model, "NumericFocus", 2)   # tighten numerics (large nuclear/coal coeffs push barrier off certified-optimal)
+        set_optimizer_attribute(model, "NumericFocus", 1)   # mild numeric care; 2 cost more but still went sub-optimal (barrier stalls ~3e-4 primal resid from ~1e8 matrix/RHS scaling) -> write-if-feasible handles it
         set_optimizer_attribute(model, "Crossover", 0)
         set_optimizer_attribute(model, "GURO_PAR_DUMP", 0)
         if solver_log
