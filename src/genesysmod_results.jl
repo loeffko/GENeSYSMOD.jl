@@ -246,6 +246,28 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
     df_total_capacity[!,:Type] .= "TotalCapacity"
     df_total_capacity[!,:PathwayScenario] .= "$(Switch.emissionPathway)_$(Switch.emissionScenario)"
 
+    # Capacity-bound input parameters added as extra Types, so the result analysis can
+    # tell which builds sit at a binding bound vs are endogenous model choices. The
+    # 999999 "no-limit" sentinel is dropped from the max bounds (only real caps matter);
+    # zero min/new-min entries are skipped by convert_jump_container_to_df / _round4.
+    df_max_capacity = convert_jump_container_to_df(Params.TotalAnnualMaxCapacity;dim_names=[:Region, :Technology, :Year])
+    df_max_capacity = df_max_capacity[df_max_capacity.Value .< 999999, :]
+    df_max_capacity[!,:Type] .= "TotalAnnualMaxCapacity"
+    df_max_capacity[!,:PathwayScenario] .= "$(Switch.emissionPathway)_$(Switch.emissionScenario)"
+
+    df_min_capacity = convert_jump_container_to_df(Params.TotalAnnualMinCapacity;dim_names=[:Region, :Technology, :Year])
+    df_min_capacity[!,:Type] .= "TotalAnnualMinCapacity"
+    df_min_capacity[!,:PathwayScenario] .= "$(Switch.emissionPathway)_$(Switch.emissionScenario)"
+
+    df_maxnew_capacity = convert_jump_container_to_df(Params.AnnualMaxNewCapacity;dim_names=[:Region, :Technology, :Year])
+    df_maxnew_capacity = df_maxnew_capacity[df_maxnew_capacity.Value .< 999999, :]
+    df_maxnew_capacity[!,:Type] .= "AnnualMaxNewCapacity"
+    df_maxnew_capacity[!,:PathwayScenario] .= "$(Switch.emissionPathway)_$(Switch.emissionScenario)"
+
+    df_minnew_capacity = convert_jump_container_to_df(Params.AnnualMinNewCapacity;dim_names=[:Region, :Technology, :Year])
+    df_minnew_capacity[!,:Type] .= "AnnualMinNewCapacity"
+    df_minnew_capacity[!,:PathwayScenario] .= "$(Switch.emissionPathway)_$(Switch.emissionScenario)"
+
     dict_col_value = Dict()
     for se ∈ Sets.Sector
         tmp_techs = [t_ for t_ ∈ Sets.Technology if Params.Tags.TagTechnologyToSector[t_,se] != 0]
@@ -265,6 +287,12 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
             subset_total_capacity = df_total_capacity[in.(df_total_capacity.Technology, Ref(tmp_techs)),:]
             subset_total_capacity[!,:Sector] .= se
             merge_df!(subset_total_capacity, dict_col_value, output_capacity, colnames)
+
+            for bound_df ∈ (df_max_capacity, df_min_capacity, df_maxnew_capacity, df_minnew_capacity)
+                subset_bound = bound_df[in.(bound_df.Technology, Ref(tmp_techs)),:]
+                subset_bound[!,:Sector] .= se
+                merge_df!(subset_bound, dict_col_value, output_capacity, colnames)
+            end
         end
     end
 
