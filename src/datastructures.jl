@@ -376,6 +376,10 @@ struct Parameters <: InputClass
     REMinProductionTarget ::JuMP.Containers.DenseAxisArray
     TradeCapacityGrowthCosts ::JuMP.Containers.DenseAxisArray
     GrowthRateTradeCapacity ::JuMP.Containers.DenseAxisArray
+    # Absolute interconnector bounds on TotalTradeCapacity per (region, region2, fuel,
+    # year): Max defaults to 999999 (no limit), Min to 0. Used by TrCMax / TrCMin.
+    AnnualMaxTradeCapacity ::JuMP.Containers.DenseAxisArray
+    AnnualMinTradeCapacity ::JuMP.Containers.DenseAxisArray
 
     SelfSufficiency ::JuMP.Containers.DenseAxisArray
     ProductionGrowthLimit ::JuMP.Containers.DenseAxisArray

@@ -495,6 +495,17 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
           @constraint(model, (Params.GrowthRateTradeCapacity[r,rr,f,𝓨[i]]*YearlyDifferenceMultiplier(𝓨[i],Sets))*Vars.TotalTradeCapacity[𝓨[i-1],f,r,rr] >= Vars.NewTradeCapacity[𝓨[i],f,r,rr],
           base_name="TrC3_NewTradeCapacityLimitPowerLines|$(𝓨[i])|Power|$(r)|$(rr)")
         end
+        # Absolute interconnector bounds on total trade capacity (e.g. the IC Low/High
+        # projections): the model picks TotalTradeCapacity within [Min, Max] per pair/year.
+        # 999999 = no upper limit; a 0 lower limit is inert.
+        if 𝓨[i] > Switch.StartYear && Params.AnnualMaxTradeCapacity[r,rr,f,𝓨[i]] < 999999
+          @constraint(model, Vars.TotalTradeCapacity[𝓨[i],f,r,rr] <= Params.AnnualMaxTradeCapacity[r,rr,f,𝓨[i]],
+          base_name="TrCMax_AnnualMaxTradeCapacityConstraint|$(𝓨[i])|$(f)|$(r)|$(rr)")
+        end
+        if 𝓨[i] > Switch.StartYear && Params.AnnualMinTradeCapacity[r,rr,f,𝓨[i]] > 0
+          @constraint(model, Vars.TotalTradeCapacity[𝓨[i],f,r,rr] >= Params.AnnualMinTradeCapacity[r,rr,f,𝓨[i]],
+          base_name="TrCMin_AnnualMinTradeCapacityConstraint|$(𝓨[i])|$(f)|$(r)|$(rr)")
+        end
       end
     end
 
@@ -538,7 +549,11 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
     end
 
     for (f,r,rr) ∈ Maps.Set_Fuel_Regions
-        if Params.TradeRoute[r,rr,f,𝓨[i]] != 0 && (Params.Tags.TagCanFuelBeTraded[f] != 0) && (Params.GrowthRateTradeCapacity[r,rr,f,𝓨[i]] == 0 || i == 1)
+        # Keep NewTradeCapacity free past the start year on pairs carrying an absolute
+        # trade bound (AnnualMaxTradeCapacity < 999999) so TotalTradeCapacity can move
+        # within [Min, Max]; otherwise the legacy rule fixes it to 0 (no growth path).
+        bounded = Params.AnnualMaxTradeCapacity[r,rr,f,𝓨[i]] < 999999 && i > 1
+        if Params.TradeRoute[r,rr,f,𝓨[i]] != 0 && (Params.Tags.TagCanFuelBeTraded[f] != 0) && (Params.GrowthRateTradeCapacity[r,rr,f,𝓨[i]] == 0 || i == 1) && !bounded
             JuMP.fix(Vars.NewTradeCapacity[𝓨[i],f,r,rr],0; force=true)
         end
     end

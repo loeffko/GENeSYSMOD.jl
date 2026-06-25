@@ -419,6 +419,13 @@ function read_params(in_data, Sets, Switch, Tags)
     GrowthRateTradeCapacity = create_daa(in_data, "Par_GrowthRateTradeCapacity", 𝓡, 𝓡, 𝓕, 𝓨)
     TradeCapacity = create_daa(in_data,"Par_TradeCapacity", 𝓡, 𝓡, 𝓕, 𝓨)
     CommissionedTradeCapacity = create_daa(in_data,"Par_CommissionedTradeCapacity", 𝓡, 𝓡, 𝓕, 𝓨)
+    # Absolute interconnector bounds (optional sheets): Max default 999999, Min default 0.
+    AnnualMaxTradeCapacity = "Par_AnnualMaxTradeCapacity" ∈ XLSX.sheetnames(in_data) ?
+        create_daa_init(in_data, "Par_AnnualMaxTradeCapacity", 999999, 𝓡, 𝓡, 𝓕, 𝓨) :
+        DenseArray(fill(999999.0, length(𝓡), length(𝓡), length(𝓕), length(𝓨)), 𝓡, 𝓡, 𝓕, 𝓨)
+    AnnualMinTradeCapacity = "Par_AnnualMinTradeCapacity" ∈ XLSX.sheetnames(in_data) ?
+        create_daa(in_data, "Par_AnnualMinTradeCapacity", 𝓡, 𝓡, 𝓕, 𝓨) :
+        DenseArray(zeros(length(𝓡), length(𝓡), length(𝓕), length(𝓨)), 𝓡, 𝓡, 𝓕, 𝓨)
     REMinProductionTarget = create_daa(in_data,"Par_REMinProductionTarget", 𝓡, 𝓕, 𝓨)
     SelfSufficiency = create_daa(in_data,"Par_SelfSufficiency", 𝓡, 𝓕, 𝓨)
     ProductionGrowthLimit = create_daa(in_data, "Par_ProductionGrowthLimit", 𝓕, 𝓨)
@@ -583,7 +590,7 @@ function read_params(in_data, Sets, Switch, Tags)
     DistrictHeatSplit,ModelPeriodEmissionLimit,RegionalModelPeriodEmissionLimit,
     CurtailmentCostFactor,TradeRoute,TradeCosts,
     TradeLossFactor,TradeRouteInstalledCapacity,TradeLossBetweenRegions,
-    TradeCapacity, CommissionedTradeCapacity,REMinProductionTarget,TradeCapacityGrowthCosts,GrowthRateTradeCapacity,SelfSufficiency,
+    TradeCapacity, CommissionedTradeCapacity,REMinProductionTarget,TradeCapacityGrowthCosts,GrowthRateTradeCapacity,AnnualMaxTradeCapacity,AnnualMinTradeCapacity,SelfSufficiency,
     ProductionGrowthLimit, RampingUpFactor,RampingDownFactor,ProductionChangeCost,MinActiveProductionPerTimeslice,
     ModalSplitByFuelAndModalType,EFactorConstruction, EFactorOM,
     EFactorManufacturing, EFactorFuelSupply, EFactorCoalJobs,CoalSupply, CoalDigging,
@@ -651,6 +658,8 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
 
     GrowthRateTradeCapacity = aggregate_cross_daa(Params_Full.GrowthRateTradeCapacity, 𝓡, 𝓡_full, Mean(), 𝓕, 𝓨)
     TradeCapacity = aggregate_cross_daa(Params_Full.TradeCapacity, 𝓡, 𝓡_full, Sum(), 𝓕, 𝓨)
+    AnnualMaxTradeCapacity = aggregate_cross_daa(Params_Full.AnnualMaxTradeCapacity, 𝓡, 𝓡_full, Sum(), 𝓕, 𝓨)
+    AnnualMinTradeCapacity = aggregate_cross_daa(Params_Full.AnnualMinTradeCapacity, 𝓡, 𝓡_full, Sum(), 𝓕, 𝓨)
     TradeRoute = aggregate_cross_daa(Params_Full.TradeRoute, 𝓡, 𝓡_full, Mean(), 𝓕, 𝓨)
     TradeCapacityGrowthCosts = aggregate_cross_daa(Params_Full.TradeCapacityGrowthCosts, 𝓡, 𝓡_full, Mean(), 𝓕)
     TradeCosts = JuMP.Containers.DenseAxisArray(
@@ -766,7 +775,7 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     DistrictHeatSplit,ModelPeriodEmissionLimit,RegionalModelPeriodEmissionLimit,
     CurtailmentCostFactor,TradeRoute,TradeCosts,
     TradeLossFactor,TradeRouteInstalledCapacity,TradeLossBetweenRegions,
-    TradeCapacity,CommissionedTradeCapacity,REMinProductionTarget,TradeCapacityGrowthCosts,GrowthRateTradeCapacity,SelfSufficiency,
+    TradeCapacity,CommissionedTradeCapacity,REMinProductionTarget,TradeCapacityGrowthCosts,GrowthRateTradeCapacity,AnnualMaxTradeCapacity,AnnualMinTradeCapacity,SelfSufficiency,
     ProductionGrowthLimit,RampingUpFactor,RampingDownFactor,ProductionChangeCost,MinActiveProductionPerTimeslice,
     ModalSplitByFuelAndModalType,EFactorConstruction, EFactorOM,
     EFactorManufacturing, EFactorFuelSupply, EFactorCoalJobs,CoalSupply, CoalDigging,
