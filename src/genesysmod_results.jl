@@ -274,7 +274,7 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
     # fuels per (y,t,r). Added to output_capacity as an "Average Capacity Factor" Type (no
     # fuel split, mirroring the other capacity Types).
     prod_ann_cf = Dict{Tuple{Int,String,String},Float64}()
-    for (t,f) ∈ Maps.Set_Tech_FuelOut, r ∈ Sets.Region, y ∈ Sets.Year
+    for (t,f) ∈ Maps.Set_Tech_FuelOut, r ∈ Sets.Region_full, y ∈ Sets.Year
         v = value(Vars.ProductionByTechnologyAnnual[y,t,f,r])
         if v > 0
             prod_ann_cf[(y,t,r)] = get(prod_ann_cf, (y,t,r), 0.0) + v
