@@ -268,6 +268,24 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
     df_minnew_capacity[!,:Type] .= "AnnualMinNewCapacity"
     df_minnew_capacity[!,:PathwayScenario] .= "$(Switch.emissionPathway)_$(Switch.emissionScenario)"
 
+    # Annual average capacity factor: generation[TWh] / installed capacity[GW] / 8.76
+    #   = (sum_f ProductionByTechnologyAnnual[PJ] / 3.6) / TotalCapacityAnnual[GW] / 8.76.
+    # ProductionByTechnologyAnnual is sparse over (t,f) in Set_Tech_FuelOut; sum the output
+    # fuels per (y,t,r). Added to output_capacity as an "Average Capacity Factor" Type (no
+    # fuel split, mirroring the other capacity Types).
+    prod_ann_cf = Dict{Tuple{Int,String,String},Float64}()
+    for (t,f) ∈ Maps.Set_Tech_FuelOut, r ∈ Sets.Region, y ∈ Sets.Year
+        v = value(Vars.ProductionByTechnologyAnnual[y,t,f,r])
+        if v > 0
+            prod_ann_cf[(y,t,r)] = get(prod_ann_cf, (y,t,r), 0.0) + v
+        end
+    end
+    df_capacity_factor = copy(df_total_capacity)
+    df_capacity_factor[!,:Value] = [row.Value > 1e-6 ?
+        (get(prod_ann_cf, (row.Year, row.Technology, row.Region), 0.0) / 3.6) / row.Value / 8.76 : 0.0
+        for row ∈ eachrow(df_total_capacity)]
+    df_capacity_factor[!,:Type] .= "Average Capacity Factor"
+
     dict_col_value = Dict()
     for se ∈ Sets.Sector
         tmp_techs = [t_ for t_ ∈ Sets.Technology if Params.Tags.TagTechnologyToSector[t_,se] != 0]
@@ -293,6 +311,10 @@ function genesysmod_results(model,Sets, Params, VarPar, Vars, Switch, Settings, 
                 subset_bound[!,:Sector] .= se
                 merge_df!(subset_bound, dict_col_value, output_capacity, colnames)
             end
+
+            subset_capacity_factor = df_capacity_factor[in.(df_capacity_factor.Technology, Ref(tmp_techs)),:]
+            subset_capacity_factor[!,:Sector] .= se
+            merge_df!(subset_capacity_factor, dict_col_value, output_capacity, colnames)
         end
     end
 
