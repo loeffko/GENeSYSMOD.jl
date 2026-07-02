@@ -37,6 +37,15 @@ It reads scenario data from Excel, builds a large LP, solves it
 
 ## Conventions & gotchas
 
+- **Never hardcode data in the model code.** Numbers (costs, factors, caps,
+  bins, prices, tech/region lists) belong in the input data pipeline (the data
+  repo's CSVs -> converted Excel), never in equations, declarations, or code
+  constants. Design every new feature region- and use-case-agnostic, keyed by
+  data with neutral defaults when rows are absent (patterns: the
+  GroupTotalAnnual*Capacity subset limits, the DispatchData_* dispatch cost
+  config). If unsure how to design something universally, ask and propose
+  options before implementing.
+
 - `𝓨` (`Sets.Year`) must be **sorted ascending** — intertemporal logic uses
   positional `𝓨[i-1]` / `𝓨[i+1]`. `read_sets` sorts it.
 - Parameters use `inherit_base_world`: data stored only under region `World` is

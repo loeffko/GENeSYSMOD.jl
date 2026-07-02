@@ -45,6 +45,103 @@ function _results_db_path_from(resultdir)
 end
 
 # ---------------------------------------------------------------------------
+# Dispatch cost configuration (merit-order realism) — fully DATA-DRIVEN.
+# Read from DispatchData_<region>.xlsx in inputdir (built by the data repo's
+# Conversion Script/convert_dispatch_data.py from Data/Dispatch/*.csv):
+#   Par_DispatchTechClass      Technology -> Class + Fuel (region-agnostic)
+#   Par_DispatchCostBins       Class, Bin, Share, CostMultiplier (fleet tranches)
+#   Par_DispatchFuelCostFactor Region, Fuel, Value (regional fuel-price basis;
+#                              'World' row = default)
+#   Par_DispatchCO2Price       Region, Year, Value [EUR/tCO2] (milestones,
+#                              linearly interpolated; absent region = 0)
+# NO numbers live in this code. A missing file or unmatched tech/region/fuel
+# falls back to neutral defaults (single bin, factor 1.0, CO2 price 0), so the
+# feature is opt-in per dataset and portable to any region.
+# ---------------------------------------------------------------------------
+struct DispatchCostConfig
+    techclass  ::Dict{String,Tuple{String,String}}        # tech -> (class, fuel)
+    bins       ::Dict{String,Vector{Tuple{Float64,Float64}}}  # class -> [(share, mult)]
+    fuelfactor ::Dict{Tuple{String,String},Float64}       # (region, fuel) -> multiplier
+    co2price   ::Dict{String,Vector{Tuple{Int,Float64}}}  # region -> [(year, EUR/t)] sorted
+    co2bench   ::Dict{String,Float64}                     # region -> free-allocation benchmark
+                                                          # (tCO2/MWh; OBPS-style: only
+                                                          # emissions ABOVE it pay the price)
+end
+const _NEUTRAL_DISPATCH_CONFIG = DispatchCostConfig(Dict(), Dict(), Dict(), Dict(), Dict())
+
+function read_dispatch_config(inputdir, dispatch_data_file)
+    isempty(dispatch_data_file) && return _NEUTRAL_DISPATCH_CONFIG
+    path = joinpath(inputdir, dispatch_data_file * ".xlsx")
+    if !isfile(path)
+        println("  dispatch: no $(basename(path)) — running with a flat merit order " *
+                "(no cost bins / regional fuel / regional CO2)")
+        return _NEUTRAL_DISPATCH_CONFIG
+    end
+    xf = XLSX.readxlsx(path)
+    sheet(n) = n ∈ XLSX.sheetnames(xf) ? DataFrame(XLSX.gettable(xf[n])) : DataFrame()
+    techclass = Dict{String,Tuple{String,String}}()
+    for r ∈ eachrow(sheet("Par_DispatchTechClass"))
+        techclass[string(r.Technology)] = (string(r.Class), string(r.Fuel))
+    end
+    bins = Dict{String,Vector{Tuple{Float64,Float64}}}()
+    for r ∈ eachrow(sheet("Par_DispatchCostBins"))
+        push!(get!(bins, string(r.Class), Tuple{Float64,Float64}[]),
+              (Float64(r.Share), Float64(r.CostMultiplier)))
+    end
+    for (c, v) ∈ bins
+        tot = sum(first.(v))
+        abs(tot - 1.0) > 1e-6 && @warn "DispatchCostBins: shares for class $(c) sum to $(tot), renormalising"
+        tot > 0 && (bins[c] = [(s/tot, m) for (s,m) ∈ v])
+        wavg = sum(s*m for (s,m) ∈ bins[c])
+        abs(wavg - 1.0) > 0.02 && @warn "DispatchCostBins: class $(c) capacity-weighted multiplier is $(round(wavg,digits=3)) (should be ~1.0 to preserve the fleet-mean cost)"
+    end
+    fuelfactor = Dict{Tuple{String,String},Float64}()
+    for r ∈ eachrow(sheet("Par_DispatchFuelCostFactor"))
+        fuelfactor[(string(r.Region), string(r.Fuel))] = Float64(r.Value)
+    end
+    co2price = Dict{String,Vector{Tuple{Int,Float64}}}()
+    co2bench = Dict{String,Float64}()
+    co2sheet = sheet("Par_DispatchCO2Price")
+    for r ∈ eachrow(co2sheet)
+        push!(get!(co2price, string(r.Region), Tuple{Int,Float64}[]), (Int(r.Year), Float64(r.Value)))
+        # optional output-based free-allocation benchmark (tCO2/MWh); only
+        # emissions above it pay the price (e.g. Canada's federal OBPS)
+        if "FreeAllocBenchmark" ∈ names(co2sheet) && !ismissing(r.FreeAllocBenchmark)
+            b = Float64(r.FreeAllocBenchmark)
+            b > 0 && (co2bench[string(r.Region)] = b)
+        end
+    end
+    foreach(v -> sort!(v, by=first), values(co2price))
+    println("  dispatch: cost config from $(basename(path)) — " *
+            "$(length(techclass)) tech classes, $(length(bins)) bin sets, " *
+            "$(length(fuelfactor)) fuel factors, $(length(co2price)) CO2 regions")
+    return DispatchCostConfig(techclass, bins, fuelfactor, co2price, co2bench)
+end
+
+# class/fuel of a tech ("", "") when unmapped; bins for a tech (nothing = single)
+_dc_class(cfg, t) = get(cfg.techclass, t, ("", ""))
+_dc_bins(cfg, t)  = get(cfg.bins, _dc_class(cfg, t)[1], nothing)
+# regional fuel-cost multiplier: exact region -> World default -> 1.0
+function _dc_fuelmult(cfg, r, t)
+    fuel = _dc_class(cfg, t)[2]
+    isempty(fuel) && return 1.0
+    get(cfg.fuelfactor, (r, fuel), get(cfg.fuelfactor, ("World", fuel), 1.0))
+end
+# regional CO2 price (EUR/t) at `year`: linear interpolation between milestone
+# years, clamped at the ends; region absent -> World -> 0.
+function _dc_co2(cfg, r, year)
+    ms = get(cfg.co2price, r, get(cfg.co2price, "World", Tuple{Int,Float64}[]))
+    isempty(ms) && return 0.0
+    year <= ms[1][1] && return ms[1][2]
+    year >= ms[end][1] && return ms[end][2]
+    for i ∈ 2:length(ms)
+        y1, v1 = ms[i-1]; y2, v2 = ms[i]
+        y1 <= year <= y2 && return v1 + (v2 - v1) * (year - y1) / (y2 - y1)
+    end
+    return ms[end][2]
+end
+
+# ---------------------------------------------------------------------------
 # Build a Switch for a full-resolution (elmod_nthhour=1) all-region data load.
 # Mirrors genesysmod_main's Switch construction; NoDispatch so dataload keeps
 # all regions, errorcheck off (8760-timeslice load trips full-year invariants).
@@ -147,7 +244,8 @@ end
 # Build + solve one dispatch year
 # ---------------------------------------------------------------------------
 function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scenario,
-                                   year, cyclic_storage, co2_price_mode)
+                                   year, cyclic_storage, co2_price_mode,
+                                   dcfg::DispatchCostConfig = _NEUTRAL_DISPATCH_CONFIG)
     Sets, Params, _ = genesysmod_dataload(switch)
     power_only_precompute!(Params, Sets, switch)
     Maps = make_mapping(Sets, Params)
@@ -197,6 +295,19 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
         (hasproperty(Params, :EmissionsPenalty) && "CO2" ∈ Sets.Emission ?
             Params.EmissionsPenalty[r,"CO2",y0] : 0.0) : Float64(co2_price_mode)
 
+    # --- merit-order cost config (data-driven; see read_dispatch_config) ---
+    # CO2 intensity in t/GWh: OutputEmissionRatio is Gt/PJ -> x1e9 [t/Gt] / 277.8 [GWh/PJ]
+    co2_t_per_GWh(r,d) = ("CO2" ∈ Sets.Emission) ?
+        sum(Params.OutputEmissionRatio[r,d,"CO2",m,y0] for m ∈ Sets.Mode_of_operation; init=0.0) * 1.0e9 / PJ_TO_GWH : 0.0
+    # regional carbon price (EUR/t) from the dispatch config, per region at this year
+    regco2 = Dict(r => _dc_co2(dcfg, r, Int(year)) for r ∈ 𝓡)
+    # marginal cost basis MEUR/GWh: fuel-basis-scaled VC + regional carbon cost
+    # (t/GWh x EUR/t x 1e-6 -> MEUR/GWh). Where a free-allocation benchmark is
+    # set (output-based systems, e.g. Canada OBPS), only the intensity ABOVE the
+    # benchmark pays. Neutral (== vc) when the tech/region is not in the config.
+    basecost(r,d) = vc(r,d) * _dc_fuelmult(dcfg, r, d) +
+        max(0.0, co2_t_per_GWh(r,d) - get(dcfg.co2bench, r, 0.0) * 1000.0) * regco2[r] * 1.0e-6
+
     infeas_pen = DISP_VOLL   # value of lost load (MEUR/GWh); price ceiling in unserved hours
 
     model = JuMP.Model(solver)
@@ -216,6 +327,26 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
     @variable(model, fpos[r ∈ 𝓡, rr ∈ 𝓡, H] >= 0)
     @variable(model, fneg[r ∈ 𝓡, rr ∈ 𝓡, H] >= 0)
     @variable(model, infe[r ∈ 𝓡, H] >= 0)                   # unserved (GWh)
+
+    # --- merit-order cost bins: split each configured thermal fleet into
+    #     tranches gb (sum = g) with per-tranche cost multipliers. Everything
+    #     else (per-hour cap, AF, ramping, min-run, balance, outputs) stays on
+    #     the total g, so the bins only shape the marginal-cost curve. ---
+    binned = [(r,d) for r ∈ 𝓡 for d ∈ disp
+              if _dc_bins(dcfg, d) !== nothing && cap[d,r] > 0 && af(r,d) > 0]
+    binnedset = Set(binned)
+    @variable(model, gb[p ∈ binned, k ∈ 1:length(_dc_bins(dcfg, p[2])), h ∈ H] >= 0)
+    for (r,d) ∈ binned
+        tranches = _dc_bins(dcfg, d)
+        for h ∈ H
+            capE = cap[d,r] * cf(r,d,h) * dur(h)
+            for (k,(share,_)) ∈ enumerate(tranches)
+                set_upper_bound(gb[(r,d),k,h], share * capE)
+            end
+            @constraint(model, sum(gb[(r,d),k,h] for k ∈ 1:length(tranches)) == g[r,d,h])
+        end
+    end
+    isempty(binned) || println("  dispatch: cost bins active on $(length(binned)) (region, tech) fleets")
 
     has_route(r,rr) = ntc[r,rr] > 0
 
@@ -301,8 +432,15 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
         == demand[(r,h)] + curt[r,h])
 
     # --- objective ---
+    # unbinned fleets pay basecost on g; binned fleets pay basecost x tranche
+    # multiplier on gb (their g carries no direct cost — it equals sum(gb)).
+    # The endogenous-emission term below stays on g for ALL fleets (it is the
+    # model's own EmissionsPenalty machinery, separate from the regional
+    # dispatch-config carbon price inside basecost).
     @objective(model, Min,
-        sum(g[r,d,h]*vc(r,d) for r ∈ 𝓡 for d ∈ disp for h ∈ H)
+        sum(g[r,d,h]*basecost(r,d) for r ∈ 𝓡 for d ∈ disp for h ∈ H if (r,d) ∉ binnedset)
+      + sum(gb[(r,d),k,h]*basecost(r,d)*_dc_bins(dcfg,d)[k][2]
+            for (r,d) ∈ binned for k ∈ 1:length(_dc_bins(dcfg,d)) for h ∈ H)
       + sum(g[r,d,h]*emisCO2(r,d)*co2price(r) for r ∈ 𝓡 for d ∈ disp for h ∈ H)
       + DISP_EPS*sum(sout[r,s,h] for r ∈ 𝓡 for s ∈ Sets.Storage for h ∈ H)
       + DISP_EPS*sum(curt[r,h] for r ∈ 𝓡 for h ∈ H)
@@ -497,10 +635,12 @@ function genesysmod_dispatch_fullyear(; years=[2025,2030,2040], scenario,
         inputdir, resultdir, solver, DNLPsolver,
         emissionPathway="MinimalExample", emissionScenario="globalLimit",
         threads=6, elmod_nthhour=1, cyclic_storage=true, co2_price=:endogenous,
+        dispatch_data_file="",
         solver_attr=Dict("Method"=>2, "Crossover"=>0, "BarHomogeneous"=>1))
 
     results_db  = _results_db_path_from(resultdir)
     dispatch_db = _dispatch_db_path(resultdir)
+    dcfg = read_dispatch_config(inputdir, dispatch_data_file)
     summary = Dict{Int,Any}()
     for year ∈ years
         println("\n=== dispatch_fullyear: year $(year), scenario $(scenario) ===")
@@ -512,7 +652,7 @@ function genesysmod_dispatch_fullyear(; years=[2025,2030,2040], scenario,
             elmod_nthhour=elmod_nthhour, extr_str=string(scenario))
         model, Sets, Params, disp, var, storage_power, H, hidx, demand, balance, V =
             dispatch_build_solve_year(switch, solver, solver_attr, results_db, scenario,
-                                      year, cyclic_storage, co2_price)
+                                      year, cyclic_storage, co2_price, dcfg)
         st = termination_status(model)
         feasible = primal_status(model) == MOI.FEASIBLE_POINT
         println("  solve: $(st)  obj=$(feasible ? objective_value(model) : NaN)")

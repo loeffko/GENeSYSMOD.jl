@@ -15,11 +15,14 @@ using Ipopt
 
 solver = Gurobi.Optimizer
 const RES = joinpath(pkgdir(GENeSYSMOD), "Results")
-const SCENARIO = "73_ramping_invlimit"
+const SCENARIO = "49_base_update0702"
 
 summary = genesysmod_dispatch_fullyear(;
     years          = [2025, 2030, 2040],
     scenario       = SCENARIO,
+    # merit-order cost config (bins / regional fuel basis / regional CO2) from
+    # DispatchData_NorthAmerica.xlsx in InputData; "" = flat merit order
+    dispatch_data_file = "DispatchData_NorthAmerica",
     model_region   = "north_america",
     data_base_region = "California",
     data_file      = "RegularParameters_NorthAmerica",
