@@ -61,13 +61,20 @@ end
 struct DispatchCostConfig
     techclass  ::Dict{String,Tuple{String,String}}        # tech -> (class, fuel)
     bins       ::Dict{String,Vector{Tuple{Float64,Float64}}}  # class -> [(share, mult)]
-    fuelfactor ::Dict{Tuple{String,String},Float64}       # (region, fuel) -> multiplier
+    # (region, fuel) -> [(months, multiplier)]; months === nothing is the
+    # all-year/default row, a Set{Int} row applies only in those months
+    # (seasonal hub basis, e.g. Algonquin winter premium)
+    fuelfactor ::Dict{Tuple{String,String},Vector{Tuple{Union{Nothing,Set{Int}},Float64}}}
     co2price   ::Dict{String,Vector{Tuple{Int,Float64}}}  # region -> [(year, EUR/t)] sorted
     co2bench   ::Dict{String,Float64}                     # region -> free-allocation benchmark
                                                           # (tCO2/MWh; OBPS-style: only
                                                           # emissions ABOVE it pay the price)
 end
 const _NEUTRAL_DISPATCH_CONFIG = DispatchCostConfig(Dict(), Dict(), Dict(), Dict(), Dict())
+
+# month of an hour-of-year (1..8760, non-leap); clamped for safety
+const _MONTH_END_HOUR = cumsum([31,28,31,30,31,30,31,31,30,31,30,31] .* 24)
+_month_of_hour(h) = searchsortedfirst(_MONTH_END_HOUR, clamp(h, 1, 8760))
 
 function read_dispatch_config(inputdir, dispatch_data_file)
     isempty(dispatch_data_file) && return _NEUTRAL_DISPATCH_CONFIG
@@ -95,9 +102,15 @@ function read_dispatch_config(inputdir, dispatch_data_file)
         wavg = sum(s*m for (s,m) ∈ bins[c])
         abs(wavg - 1.0) > 0.02 && @warn "DispatchCostBins: class $(c) capacity-weighted multiplier is $(round(wavg,digits=3)) (should be ~1.0 to preserve the fleet-mean cost)"
     end
-    fuelfactor = Dict{Tuple{String,String},Float64}()
-    for r ∈ eachrow(sheet("Par_DispatchFuelCostFactor"))
-        fuelfactor[(string(r.Region), string(r.Fuel))] = Float64(r.Value)
+    fuelfactor = Dict{Tuple{String,String},Vector{Tuple{Union{Nothing,Set{Int}},Float64}}}()
+    ffsheet = sheet("Par_DispatchFuelCostFactor")
+    for r ∈ eachrow(ffsheet)
+        months = nothing   # all-year/default row
+        if "Months" ∈ names(ffsheet) && !ismissing(r.Months) && !isempty(strip(string(r.Months)))
+            months = Set(parse(Int, m) for m ∈ split(string(r.Months), ",") if !isempty(strip(m)))
+        end
+        push!(get!(fuelfactor, (string(r.Region), string(r.Fuel)),
+                   Tuple{Union{Nothing,Set{Int}},Float64}[]), (months, Float64(r.Value)))
     end
     co2price = Dict{String,Vector{Tuple{Int,Float64}}}()
     co2bench = Dict{String,Float64}()
@@ -121,11 +134,22 @@ end
 # class/fuel of a tech ("", "") when unmapped; bins for a tech (nothing = single)
 _dc_class(cfg, t) = get(cfg.techclass, t, ("", ""))
 _dc_bins(cfg, t)  = get(cfg.bins, _dc_class(cfg, t)[1], nothing)
-# regional fuel-cost multiplier: exact region -> World default -> 1.0
-function _dc_fuelmult(cfg, r, t)
+# regional fuel-cost multiplier at month `mon`: a month-specific row wins over
+# the all-year row; exact region -> World default -> 1.0
+function _dc_fuelmult(cfg, r, t, mon)
     fuel = _dc_class(cfg, t)[2]
     isempty(fuel) && return 1.0
-    get(cfg.fuelfactor, (r, fuel), get(cfg.fuelfactor, ("World", fuel), 1.0))
+    for key ∈ ((r, fuel), ("World", fuel))
+        rows = get(cfg.fuelfactor, key, nothing)
+        rows === nothing && continue
+        for (months, v) ∈ rows          # month-specific rows first
+            months !== nothing && mon ∈ months && return v
+        end
+        for (months, v) ∈ rows          # then the all-year/default row
+            months === nothing && return v
+        end
+    end
+    return 1.0
 end
 # regional CO2 price (EUR/t) at `year`: linear interpolation between milestone
 # years, clamped at the ends; region absent -> World -> 0.
@@ -302,11 +326,16 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
     # regional carbon price (EUR/t) from the dispatch config, per region at this year
     regco2 = Dict(r => _dc_co2(dcfg, r, Int(year)) for r ∈ 𝓡)
     # marginal cost basis MEUR/GWh: fuel-basis-scaled VC + regional carbon cost
-    # (t/GWh x EUR/t x 1e-6 -> MEUR/GWh). Where a free-allocation benchmark is
+    # (t/GWh x EUR/t x 1e-6 -> MEUR/GWh). The fuel factor is month-aware
+    # (seasonal hub basis, e.g. Algonquin winter premium), so basecost takes the
+    # timeslice h; the month comes from the hour-of-year (position-scaled if the
+    # run is not at full 8760 resolution). Where a free-allocation benchmark is
     # set (output-based systems, e.g. Canada OBPS), only the intensity ABOVE the
     # benchmark pays. Neutral (== vc) when the tech/region is not in the config.
-    basecost(r,d) = vc(r,d) * _dc_fuelmult(dcfg, r, d) +
-        max(0.0, co2_t_per_GWh(r,d) - get(dcfg.co2bench, r, 0.0) * 1000.0) * regco2[r] * 1.0e-6
+    co2part(r,d) = max(0.0, co2_t_per_GWh(r,d) - get(dcfg.co2bench, r, 0.0) * 1000.0) * regco2[r] * 1.0e-6
+    nts = length(𝓛)
+    month_of_ts = Dict(h => _month_of_hour(ceil(Int, i * 8760 / nts)) for (i,h) ∈ enumerate(𝓛))
+    basecost(r,d,h) = vc(r,d) * _dc_fuelmult(dcfg, r, d, month_of_ts[h]) + co2part(r,d)
 
     infeas_pen = DISP_VOLL   # value of lost load (MEUR/GWh); price ceiling in unserved hours
 
@@ -438,8 +467,8 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
     # model's own EmissionsPenalty machinery, separate from the regional
     # dispatch-config carbon price inside basecost).
     @objective(model, Min,
-        sum(g[r,d,h]*basecost(r,d) for r ∈ 𝓡 for d ∈ disp for h ∈ H if (r,d) ∉ binnedset)
-      + sum(gb[(r,d),k,h]*basecost(r,d)*_dc_bins(dcfg,d)[k][2]
+        sum(g[r,d,h]*basecost(r,d,h) for r ∈ 𝓡 for d ∈ disp for h ∈ H if (r,d) ∉ binnedset)
+      + sum(gb[(r,d),k,h]*basecost(r,d,h)*_dc_bins(dcfg,d)[k][2]
             for (r,d) ∈ binned for k ∈ 1:length(_dc_bins(dcfg,d)) for h ∈ H)
       + sum(g[r,d,h]*emisCO2(r,d)*co2price(r) for r ∈ 𝓡 for d ∈ disp for h ∈ H)
       + DISP_EPS*sum(sout[r,s,h] for r ∈ 𝓡 for s ∈ Sets.Storage for h ∈ H)
