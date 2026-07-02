@@ -6,7 +6,7 @@ using Ipopt
 
 # Full-year (8760 h) multi-region hourly DISPATCH for the North America power-only
 # model. Reads the fixed investment capacities of an existing scenario from
-# genesysmod_results_db.duckdb and computes the hourly dispatch for each year,
+# genesysmod_db.duckdb and computes the hourly dispatch for each year,
 # writing generation / storage / nodal-price / trade to
 # genesysmod_dispatch_results.duckdb (keyed Scenario/Year/Region/Hour).
 #

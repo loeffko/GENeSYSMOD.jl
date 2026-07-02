@@ -3,7 +3,8 @@ Full-year (8760 h) multi-region economic dispatch — a Julia port of the
 standalone GAMS `genesysmod_dispatch.gms`.
 
 It FIXES capacities from a prior investment run (read from
-`genesysmod_results_db.duckdb`, scenario- + year-keyed), pulls the hourly
+`genesysmod_db.duckdb`, scenario- + year-keyed; falls back to the pre-merge
+`genesysmod_results_db.duckdb`), pulls the hourly
 profiles + merged demand from a full-resolution data load (`elmod_nthhour=1`),
 builds an hourly LP over ALL regions, solves it, and writes the hourly
 dispatch (generation by tech, storage in/out/SoC, net trade flow, curtailment,
@@ -31,7 +32,17 @@ const DISP_VOLL = 10.0                 # value of lost load, MEUR/GWh (= 10 000 
 const DISP_STORAGE_LOSSES = Dict("S_Battery_Li-Ion" => 0.00417)   # ≈10%/day; others 0
 
 _dispatch_db_path(resultdir) = joinpath(resultdir, DISPATCH_RESULTS_DB_FILENAME)
-_results_db_path_from(resultdir) = joinpath(resultdir, RESULTS_DB_FILENAME)
+# Investment results live in the merged genesysmod_db.duckdb; fall back to the
+# pre-merge results-only file so dispatch still runs on older investment runs.
+function _results_db_path_from(resultdir)
+    path = joinpath(resultdir, DB_FILENAME)
+    legacy = joinpath(resultdir, LEGACY_RESULTS_DB_FILENAME)
+    if !isfile(path) && isfile(legacy)
+        println("  dispatch: $(DB_FILENAME) not found, using legacy $(LEGACY_RESULTS_DB_FILENAME)")
+        return legacy
+    end
+    return path
+end
 
 # ---------------------------------------------------------------------------
 # Build a Switch for a full-resolution (elmod_nthhour=1) all-region data load.
@@ -54,7 +65,7 @@ function _make_dispatch_switch(; year, model_region, data_base_region, data_file
 end
 
 # ---------------------------------------------------------------------------
-# Read the fixed investment results from genesysmod_results_db.duckdb
+# Read the fixed investment results from genesysmod_db.duckdb
 # ---------------------------------------------------------------------------
 """
 Return (cap, scap, ntc) for one (scenario, year):
@@ -442,7 +453,7 @@ end
 
 Run the full-year hourly multi-region dispatch for each year in `years`, reading
 fixed capacities from the investment scenario `scenario` in
-`genesysmod_results_db.duckdb`, and writing results to
+`genesysmod_db.duckdb`, and writing results to
 `genesysmod_dispatch_results.duckdb` (keyed Scenario/Year/Region/Hour).
 """
 function genesysmod_dispatch_fullyear(; years=[2025,2030,2040], scenario,
