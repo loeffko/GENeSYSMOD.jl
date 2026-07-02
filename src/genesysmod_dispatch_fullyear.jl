@@ -196,7 +196,12 @@ Return (cap, scap, ntc) for one (scenario, year):
 as DenseAxisArrays over the dispatch Sets.
 """
 function read_investments_db(results_db, scenario, year, Sets)
-    con = _db_connect(results_db)
+    # READ-ONLY, non-cached connection, closed as soon as the three frames are
+    # read: the dispatch only ever reads the investment database, so a
+    # multi-hour dispatch run must not hold a (write-mode) lock on it — that
+    # blocked every external reader/writer for the whole run. A read-only
+    # handle also coexists with other readers even while briefly open.
+    con = DuckDB.DB(results_db; readonly=true)
     sc = String(scenario); yr = Int(year)
     function df_or_empty(sql, params)
         try
@@ -208,13 +213,19 @@ function read_investments_db(results_db, scenario, year, Sets)
     end
     capdf = df_or_empty("SELECT Technology, Region, Value FROM raw_TotalCapacityAnnual " *
                         "WHERE Scenario = ? AND Year = ?", [sc, yr])
-    cap = create_daa(capdf, "", Sets.Technology, Sets.Region_full)
     scapdf = df_or_empty("SELECT Storage, Region, Value FROM raw_TotalStorageCapacityAnnual " *
                          "WHERE Scenario = ? AND Year = ?", [sc, yr])
-    scap = create_daa(scapdf, "", Sets.Storage, Sets.Region_full)
     # sparse trade table: x1=Year, x2=Fuel, x3=Region, x4=Region2, y=Value
     ntcdf = df_or_empty("SELECT x3, x4, y FROM raw_TotalTradeCapacity " *
                         "WHERE Scenario = ? AND x1 = ? AND lower(x2) = 'power'", [sc, yr])
+    try
+        DBInterface.close!(con)
+    catch e
+        @warn "dispatch: could not close read-only investment-db handle" exception=e
+    end
+    GC.gc()   # drop query-result finalizers so the file handle is really released
+    cap = create_daa(capdf, "", Sets.Technology, Sets.Region_full)
+    scap = create_daa(scapdf, "", Sets.Storage, Sets.Region_full)
     ntc = create_daa(ntcdf, "", Sets.Region_full, Sets.Region_full)
     return cap, scap, ntc
 end
