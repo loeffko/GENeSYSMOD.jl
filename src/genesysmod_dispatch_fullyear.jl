@@ -320,10 +320,39 @@ end
 # ---------------------------------------------------------------------------
 # Write one year's results to genesysmod_dispatch_results.duckdb
 # ---------------------------------------------------------------------------
+
+"""
+One-time in-place migration of a pre-Unit-column dispatch database: adds the
+`Unit` column to the dispatch tables and rescales legacy price rows from the
+old raw dual unit (MEUR/GWh) to EUR/MWh (x1000). Legacy rows are identified by
+`Unit IS NULL`, so the migration is idempotent and never touches new rows.
+"""
+function _migrate_dispatch_units!(con)
+    for t in ("dispatch_generation", "dispatch_storage", "dispatch_trade",
+              "dispatch_balance", "dispatch_combined")
+        _table_exists(con, t) || continue
+        cols = DataFrame(DBInterface.execute(con,
+            "SELECT column_name FROM information_schema.columns WHERE table_name = ?", [t])).column_name
+        "Unit" ∈ cols && continue
+        DBInterface.execute(con, "ALTER TABLE $(_quote_ident(t)) ADD COLUMN Unit VARCHAR")
+        if t == "dispatch_balance"
+            DBInterface.execute(con, "UPDATE dispatch_balance SET Price = Price*1000 WHERE Unit IS NULL")
+            DBInterface.execute(con, "UPDATE dispatch_balance SET Unit = 'GWh (Price: EUR/MWh)' WHERE Unit IS NULL")
+        elseif t == "dispatch_combined"
+            DBInterface.execute(con, "UPDATE dispatch_combined SET Value = Value*1000 WHERE Category = 'price' AND Unit IS NULL")
+            DBInterface.execute(con, "UPDATE dispatch_combined SET Unit = CASE WHEN Category = 'price' THEN 'EUR/MWh' ELSE 'GWh' END WHERE Unit IS NULL")
+        else
+            DBInterface.execute(con, "UPDATE $(_quote_ident(t)) SET Unit = 'GWh' WHERE Unit IS NULL")
+        end
+        println("  dispatch db: migrated $(t) (added Unit; legacy prices -> EUR/MWh)")
+    end
+end
+
 function write_dispatch_year_db(dispatch_db, scenario, year, Switch, Sets, disp, var,
                                 H, demand, balance, V)
     con = _db_connect(dispatch_db)
     sc = String(scenario); yr = Int(year)
+    _migrate_dispatch_units!(con)
     function put(table, df)
         isempty(df) && return
         out = _with_run_context(df, Switch, sc)
@@ -352,6 +381,7 @@ function write_dispatch_year_db(dispatch_db, scenario, year, Switch, Sets, disp,
             v = value(V.vg[r,vt,h]); abs(v) > 1e-6 && push!(gen, (r, vt, Int(h), round(v, digits=4)))
         end
     end
+    gen[!, :Unit] .= "GWh"
     put("dispatch_generation", gen)
     # storage operation
     sto = DataFrame(Region=String[], Storage=String[], Hour=Int[], Charge=Float64[], Discharge=Float64[], SoC=Float64[])
@@ -359,42 +389,46 @@ function write_dispatch_year_db(dispatch_db, scenario, year, Switch, Sets, disp,
         ci=value(V.sin[r,s,h]); di=value(V.sout[r,s,h]); sc_=value(V.soc[r,s,h])
         (abs(ci)>1e-6 || abs(di)>1e-6 || abs(sc_)>1e-6) && push!(sto, (r, s, Int(h), round(ci,digits=4), round(di,digits=4), round(sc_,digits=4)))
     end
+    sto[!, :Unit] .= "GWh"
     put("dispatch_storage", sto)
     # nodal balance: demand, curtailment, unserved, net import, price (dual)
     bal = DataFrame(Region=String[], Hour=Int[], Demand=Float64[], Curtailment=Float64[],
                     Unserved=Float64[], NetImport=Float64[], Price=Float64[])
     for r ∈ Sets.Region_full, h ∈ H
         netimp = sum(value(V.flow[rr,r,h]) for rr ∈ Sets.Region_full; init=0.0)
-        price = dual(balance[r,h])     # MEUR/GWh
+        # dual is MEUR/GWh (objective MEUR, balance GWh); x1000 -> EUR/MWh
+        price = dual(balance[r,h]) * 1000.0
         push!(bal, (r, Int(h), round(demand[(r,h)],digits=4), round(value(V.curt[r,h]),digits=4),
-                    round(value(V.infe[r,h]),digits=4), round(netimp,digits=4), round(price,digits=6)))
+                    round(value(V.infe[r,h]),digits=4), round(netimp,digits=4), round(price,digits=4)))
     end
+    bal[!, :Unit] .= "GWh (Price: EUR/MWh)"
     put("dispatch_balance", bal)
     # bilateral trade flows (signed, r -> rr), nonzero only
     trd = DataFrame(Region=String[], Region2=String[], Hour=Int[], Flow=Float64[])
     for r ∈ Sets.Region_full, rr ∈ Sets.Region_full, h ∈ H
         f = value(V.flow[r,rr,h]); abs(f) > 1e-6 && push!(trd, (r, rr, Int(h), round(f, digits=4)))
     end
+    trd[!, :Unit] .= "GWh"
     put("dispatch_trade", trd)
     # combined long table (GAMS `output`/`stor_oper`/`dual_price` merged into one) for
     # easy charting: every quantity as (Category, Name, Value) per Region/Hour. Sign
     # conventions mirror the GAMS output: charging (s_in) and curtailment (cur) negative.
-    comb = DataFrame(Region=String[], Hour=Int[], Category=String[], Name=String[], Value=Float64[])
+    comb = DataFrame(Region=String[], Hour=Int[], Category=String[], Name=String[], Value=Float64[], Unit=String[])
     for row ∈ eachrow(gen)                                   # generation (disp + var), nonzero
-        push!(comb, (row.Region, row.Hour, "prod", row.Technology, row.Value))
+        push!(comb, (row.Region, row.Hour, "prod", row.Technology, row.Value, "GWh"))
     end
     for row ∈ eachrow(sto)                                   # storage operation
-        push!(comb, (row.Region, row.Hour, "s_in",      row.Storage, round(-row.Charge, digits=4)))
-        push!(comb, (row.Region, row.Hour, "s_out",     row.Storage, row.Discharge))
-        push!(comb, (row.Region, row.Hour, "s_soc",     row.Storage, row.SoC))
-        push!(comb, (row.Region, row.Hour, "s_net_out", row.Storage, round(row.Discharge - row.Charge, digits=4)))
+        push!(comb, (row.Region, row.Hour, "s_in",      row.Storage, round(-row.Charge, digits=4), "GWh"))
+        push!(comb, (row.Region, row.Hour, "s_out",     row.Storage, row.Discharge, "GWh"))
+        push!(comb, (row.Region, row.Hour, "s_soc",     row.Storage, row.SoC, "GWh"))
+        push!(comb, (row.Region, row.Hour, "s_net_out", row.Storage, round(row.Discharge - row.Charge, digits=4), "GWh"))
     end
     for row ∈ eachrow(bal)                                   # demand + price every hour; rest nonzero
-        push!(comb, (row.Region, row.Hour, "dem",   "Demand", row.Demand))
-        push!(comb, (row.Region, row.Hour, "price", "Price",  row.Price))
-        row.Curtailment != 0 && push!(comb, (row.Region, row.Hour, "cur",  "Curtailment",   round(-row.Curtailment, digits=4)))
-        row.Unserved    != 0 && push!(comb, (row.Region, row.Hour, "inf",  "Infeasibility", row.Unserved))
-        row.NetImport   != 0 && push!(comb, (row.Region, row.Hour, "flow", "NetImport",     row.NetImport))
+        push!(comb, (row.Region, row.Hour, "dem",   "Demand", row.Demand, "GWh"))
+        push!(comb, (row.Region, row.Hour, "price", "Price",  row.Price, "EUR/MWh"))
+        row.Curtailment != 0 && push!(comb, (row.Region, row.Hour, "cur",  "Curtailment",   round(-row.Curtailment, digits=4), "GWh"))
+        row.Unserved    != 0 && push!(comb, (row.Region, row.Hour, "inf",  "Infeasibility", row.Unserved, "GWh"))
+        row.NetImport   != 0 && push!(comb, (row.Region, row.Hour, "flow", "NetImport",     row.NetImport, "GWh"))
     end
     put("dispatch_combined", comb)
     println("  dispatch_combined: ", nrow(comb), " rows")
@@ -416,7 +450,8 @@ function write_dispatch_summary(dispatch_db, resultdir, scenario, model_region, 
     summ = q("SELECT Year, round(sum(Demand),0) AS Demand_GWh, " *
              "round(sum(Curtailment),0) AS Curtailment_GWh, round(sum(Unserved),1) AS Unserved_GWh, " *
              "round(100*sum(Unserved)/nullif(sum(Demand),0),3) AS Unserved_pct, " *
-             "round(avg(Price)*1000,1) AS AvgPrice_EURMWh, round(max(Price)*1000,0) AS MaxPrice_EURMWh " *
+             # Price column is already EUR/MWh (converted at write; legacy rows migrated)
+             "round(avg(Price),1) AS AvgPrice_EURMWh, round(max(Price),0) AS MaxPrice_EURMWh " *
              "FROM dispatch_balance WHERE Scenario = ? GROUP BY Year ORDER BY Year")
     if isempty(summ)
         @warn "dispatch summary: no rows for scenario $(sc)"; return summ
