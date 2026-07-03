@@ -15,7 +15,7 @@ using Ipopt
 
 solver = Gurobi.Optimizer
 const RES = joinpath(pkgdir(GENeSYSMOD), "Results")
-const SCENARIO = "49_base_update0702"
+const SCENARIO = "49_base_update0703_2015"
 
 summary = genesysmod_dispatch_fullyear(;
     years          = [2025, 2030, 2040],
@@ -26,7 +26,7 @@ summary = genesysmod_dispatch_fullyear(;
     model_region   = "north_america",
     data_base_region = "California",
     data_file      = "RegularParameters_NorthAmerica",
-    hourly_data_file = "Timeseries_NorthAmerica",
+    hourly_data_file = "Timeseries_NorthAmerica_2015",
     allfuels_data_file = "RegularParameters_NorthAmerica_allFuels",
     switch_power_only_mode = 1,
     inputdir       = joinpath(pkgdir(GENeSYSMOD), "InputData"),

@@ -1,6 +1,7 @@
 """Interactive manager for the GENeSYS-MOD DuckDB results database.
 
 Lists the scenarios (model runs) stored in a database, and lets you
+  re[n]ame  rename a scenario (fix a mislabelled extr_str) across all tables
   [s]plit   copy selected scenarios into a separate .duckdb (backup/archive),
             optionally including the shared (non-scenario) tables such as the
             input_* dump, and optionally purging them from the source (= move)
@@ -81,6 +82,25 @@ def pick(scens, prompt):
     return sel
 
 
+def rename(con, scen_tables, scens):
+    sel = pick(scens, "scenario to rename (exactly one)")
+    if len(sel) != 1:
+        if len(sel) > 1:
+            print("  pick exactly one")
+        return
+    old = sel[0]
+    new = input(f"new name for '{old}': ").strip()
+    if not new or new == old:
+        print("  cancelled");  return
+    if new in scens and input(f"  '{new}' already exists - MERGE '{old}' into it? [y/N]: ").strip().lower() != "y":
+        return
+    n = 0
+    for t in scen_tables:
+        res = con.execute(f"UPDATE {q_ident(t)} SET Scenario = ? WHERE Scenario = ?", [new, old]).fetchall()
+        n += res[0][0] if res else 0
+    print(f"  renamed '{old}' -> '{new}' ({n:,} rows)")
+
+
 def purge(con, scen_tables, sel):
     for sc in sel:
         n = 0
@@ -140,10 +160,14 @@ def main():
     scen_tables, shared, counts = scan(con)
     scens = show(counts, scen_tables, shared)
     while True:
-        cmd = input("\n[s]plit  [p]urge  [c]ompact  [r]efresh  [q]uit > ").strip().lower()
+        cmd = input("\n[s]plit  [p]urge  re[n]ame  [c]ompact  [r]efresh  [q]uit > ").strip().lower()
         if cmd == "q":
             break
         elif cmd == "r":
+            scen_tables, shared, counts = scan(con)
+            scens = show(counts, scen_tables, shared)
+        elif cmd == "n":
+            rename(con, scen_tables, scens)
             scen_tables, shared, counts = scan(con)
             scens = show(counts, scen_tables, shared)
         elif cmd == "s":
