@@ -189,9 +189,16 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     switch_power_only_mode=0, allfuels_data_file="",
     switch_endogenous_specifieddemandforecasting=0, switch_results_db=0, switch_errorcheck=2,
     extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1, solver_log=true, solver_attr=Dict(),
-    switch_test_data_load=0, switch_dump_input_data=0)
+    switch_test_data_load=0, switch_dump_input_data=0,
+    set_investment_limit=1.9, set_new_res_capacity=0.1)
 
     starttime = Dates.now()
+
+    # pacing overrides (SC1 capital spreading / SC2 annual RE-addition cap =
+    # set_new_res_capacity * TotalAnnualMaxCapacity) — read by
+    # genesysmod_settings; high-demand sensitivities loosen them per run
+    SET_INVESTMENT_LIMIT[] = Float64(set_investment_limit)
+    SET_NEW_RES_CAPACITY[] = Float64(set_new_res_capacity)
 
     model, case = genesysmod_build_model(;elmod_daystep=elmod_daystep, elmod_hourstep=elmod_hourstep, solver=solver, DNLPsolver=DNLPsolver,
     year=year, model_region=model_region, data_base_region=data_base_region,

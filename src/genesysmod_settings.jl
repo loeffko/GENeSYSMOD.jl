@@ -1,3 +1,8 @@
+# Run-level overrides for the pacing settings (set by genesysmod() kwargs;
+# defaults match the historical hardcoded values).
+const SET_INVESTMENT_LIMIT = Ref(1.9)
+const SET_NEW_RES_CAPACITY = Ref(0.1)
+
 """
 Internal function used in the run process to set run settings such as dicount rates.
 """
@@ -19,12 +24,14 @@ function genesysmod_settings(Sets, Params, socialdiscountrate)
         SocialDiscountRate[r] = socialdiscountrate
     end
 
-    InvestmentLimit = Float64(1.9)  #Freedom for investment choices to spread across periods. A value of 1 would mean equal share for each period.
-    # SC2 annual RE-addition cap = NewRESCapacity * TotalAnnualMaxCapacity (only
-    # active with switch_investLimit). Floored in equ.jl at the min-capacity
-    # increment so it never blocks a founded minimum even where the funnel keeps
-    # the max tight.
-    NewRESCapacity = Float64(0.1)
+    # Pacing settings, overridable per run via the genesysmod() keyword arguments
+    # set_investment_limit / set_new_res_capacity (e.g. high-demand sensitivities
+    # need faster build-out): SC1 spreads total capital across periods
+    # (InvestmentLimit; 1 = equal shares), SC2 caps annual RE additions at
+    # NewRESCapacity * TotalAnnualMaxCapacity (only active with
+    # switch_investLimit; floored in equ.jl at the min-capacity increment).
+    InvestmentLimit = SET_INVESTMENT_LIMIT[]
+    NewRESCapacity = SET_NEW_RES_CAPACITY[]
     #ProductionGrowthLimit=JuMP.Containers.DenseAxisArray(zeros(length(Sets.Year), length(Sets.Fuel)), Sets.Year, Sets.Fuel)
     #= for y ∈ Sets.Year for f ∈ Sets.Fuel
         if f ∈ vcat(["Power"],Params.Tags.TagFuelToSubsets["HeatFuels"],Params.Tags.TagFuelToSubsets["TransportFuels"])
