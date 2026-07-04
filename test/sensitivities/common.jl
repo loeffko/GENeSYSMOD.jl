@@ -31,7 +31,8 @@ function run_na_investment(; sensitivity="base", weather_year="2015",
                            daystep=2, hourstep=1, version="")
     label = sens_label(sensitivity, daystep, hourstep, weather_year, version)
     println("\n########## investment: $(label) ##########")
-    genesysmod(; solver=Gurobi.Optimizer, DNLPsolver=Ipopt.Optimizer,
+    extra = get(SENS_MODEL_KWARGS, sensitivity, NamedTuple())
+    genesysmod(; extra..., solver=Gurobi.Optimizer, DNLPsolver=Ipopt.Optimizer,
         year=2025, elmod_daystep=daystep, elmod_hourstep=hourstep, threads=6,
         inputdir=joinpath(pkgdir(GENeSYSMOD), "InputData"),
         resultdir=SENS_RESULTS_DIR,
