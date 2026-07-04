@@ -24,8 +24,11 @@ const SENS_MODEL_KWARGS = Dict(
     # the ceiling (default 10%).
     "dc_high" => (set_new_res_capacity = 0.2,),
     # dc_high_limitless: pacing mostly gone (the data side drops the build
-    # caps too: gas 100 GW/yr, EGS 4 GW/yr, funnel max x2, P_SOFC enabled).
-    "dc_high_limitless" => (set_investment_limit = 3.0, set_new_res_capacity = 0.3),
+    # caps too: gas 100 GW/yr, EGS 4 GW/yr, ERCOT funnel max x2, P_SOFC).
+    # The RES-additions lift to 0.3 applies to ERCOT only - elsewhere the
+    # demand shift is assumed to re-route gas builds, not accelerate RES.
+    "dc_high_limitless" => (set_investment_limit = 3.0, set_new_res_capacity = 0.2,
+                            set_new_res_capacity_region = Dict("ERCOT" => 0.3)),
 )
 
 "Scenario label for a sensitivity run."

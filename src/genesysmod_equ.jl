@@ -701,7 +701,7 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
                     rr_ym = max(0.0, Params.TotalAnnualMinCapacity[r,t,𝓨[i-1]] - Params.ResidualCapacity[r,t,𝓨[i-1]])
                     min_inc = max(0.0, rr_y - rr_ym)
                     @constraint(model,
-                    Vars.NewCapacity[𝓨[i],t,r] <= max(YearlyDifferenceMultiplier(𝓨[i-1],Sets)*(t ∈ egs_techs ? 1.0 : Settings.NewRESCapacity)*Params.TotalAnnualMaxCapacity[r,t,𝓨[i]], min_inc),
+                    Vars.NewCapacity[𝓨[i],t,r] <= max(YearlyDifferenceMultiplier(𝓨[i-1],Sets)*(t ∈ egs_techs ? 1.0 : get(Settings.NewRESCapacityRegion, r, Settings.NewRESCapacity))*Params.TotalAnnualMaxCapacity[r,t,𝓨[i]], min_inc),
                     base_name="SC2_LimitAnnualCapacityAdditions|$(𝓨[i])|$(r)|$(t)")
                 end
             end

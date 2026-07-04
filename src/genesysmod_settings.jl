@@ -2,6 +2,7 @@
 # defaults match the historical hardcoded values).
 const SET_INVESTMENT_LIMIT = Ref(1.9)
 const SET_NEW_RES_CAPACITY = Ref(0.1)
+const SET_NEW_RES_CAPACITY_REGION = Ref(Dict{String,Float64}())
 
 """
 Internal function used in the run process to set run settings such as dicount rates.
@@ -32,6 +33,7 @@ function genesysmod_settings(Sets, Params, socialdiscountrate)
     # switch_investLimit; floored in equ.jl at the min-capacity increment).
     InvestmentLimit = SET_INVESTMENT_LIMIT[]
     NewRESCapacity = SET_NEW_RES_CAPACITY[]
+    NewRESCapacityRegion = SET_NEW_RES_CAPACITY_REGION[]
     #ProductionGrowthLimit=JuMP.Containers.DenseAxisArray(zeros(length(Sets.Year), length(Sets.Fuel)), Sets.Year, Sets.Fuel)
     #= for y ∈ Sets.Year for f ∈ Sets.Fuel
         if f ∈ vcat(["Power"],Params.Tags.TagFuelToSubsets["HeatFuels"],Params.Tags.TagFuelToSubsets["TransportFuels"])
@@ -58,7 +60,7 @@ function genesysmod_settings(Sets, Params, socialdiscountrate)
     #StorageLevelYearStartLowerLimit = Switch.set_storagelevelstart_down
 
 
-    Settings=GENeSYSMOD.Settings(DepreciationMethod,GeneralDiscountRate,TechnologyDiscountRate,SocialDiscountRate,InvestmentLimit,NewRESCapacity,
+    Settings=GENeSYSMOD.Settings(DepreciationMethod,GeneralDiscountRate,TechnologyDiscountRate,SocialDiscountRate,InvestmentLimit,NewRESCapacity,NewRESCapacityRegion,
     StorageLimitOffset,Trajectory2020UpperLimit,Trajectory2020LowerLimit, BaseYearSlack, PhaseIn, PhaseOut)
     return Settings
 end

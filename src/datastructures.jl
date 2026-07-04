@@ -522,6 +522,9 @@ Model settings necessary for running the model
 - **`SocialDiscountRate ::JuMP.Containers.DenseAxisArray`** TODO.\n
 - **`InvestmentLimit`** TODO.\n
 - **`NewRESCapacity ::Float64`** TODO.\n
+- **`NewRESCapacityRegion ::Dict{String,Float64}`** Per-region override of
+    NewRESCapacity for the SC2 annual-additions cap; regions not present use
+    the scalar NewRESCapacity.\n
 - **`ProductionGrowthLimit ::JuMP.Containers.DenseAxisArray`** This parameter controls the
     maximal increase between two years of a specific fuel production from renewable energy
     sources.\n
@@ -540,6 +543,7 @@ struct Settings <: InputClass
     SocialDiscountRate ::JuMP.Containers.DenseAxisArray
     InvestmentLimit ::Float64
     NewRESCapacity ::Float64
+    NewRESCapacityRegion ::Dict{String,Float64}
     StorageLimitOffset ::Float64
     Trajectory2020UpperLimit ::Float64
     Trajectory2020LowerLimit ::Float64
