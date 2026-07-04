@@ -14,6 +14,20 @@ using Ipopt
 const SENS_RESULTS_DIR = joinpath(pkgdir(GENeSYSMOD), "Results")
 const SENS_WEATHER_YEARS = ["2012", "2015", "2017", "2018"]
 
+# Per-sensitivity model-side overrides (splatted into the genesysmod() call).
+# The SC1/SC2 build pacing (InvestmentLimit 1.9, NewRESCapacity 0.1) cannot
+# track the dc_high demand path (ERCOT ~4.6x by 2040 -> unserved energy while
+# the capacity ceilings still have headroom) - the demand boom is assumed to
+# accelerate construction itself.
+const SENS_MODEL_KWARGS = Dict(
+    # dc_high: keep SC1 capital spreading, allow RE additions up to 20%/yr of
+    # the ceiling (default 10%).
+    "dc_high" => (set_new_res_capacity = 0.2,),
+    # dc_high_limitless: pacing mostly gone (the data side drops the build
+    # caps too: gas 100 GW/yr, EGS 4 GW/yr, funnel max x2, P_SOFC enabled).
+    "dc_high_limitless" => (set_investment_limit = 3.0, set_new_res_capacity = 0.3),
+)
+
 "Scenario label for a sensitivity run."
 sens_label(sensitivity, daystep, hourstep, weather_year, version) =
     "fel2026_$(sensitivity)_$(daystep * 24 + hourstep)_$(weather_year)" *
