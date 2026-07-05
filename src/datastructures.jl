@@ -331,6 +331,9 @@ struct Parameters <: InputClass
     # a technology subset × region subset, per year. 999999 = no limit. Smooths the
     # build path of a tech group (e.g. EGS) via data, no per-tech/region hardcode.
     GroupTotalAnnualMaxNewCapacity ::JuMP.Containers.DenseAxisArray
+    # Per-fuel time-independence tag (1 = treat the fuel's energy balance
+    # annually, no per-timeslice balance). Optional input sheet.
+    TagTimeIndependentFuel ::JuMP.Containers.DenseAxisArray
 
     AnnualSectoralEmissionLimit ::JuMP.Containers.DenseAxisArray
 

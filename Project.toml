@@ -1,6 +1,6 @@
 name = "GENeSYSMOD"
 uuid = "9f3a37f9-d498-4265-a124-3ae3e9ff3acf"
-version = "4.2.0"
+version = "4.4.1"
 authors = ["Dimitri Pinel <dimitri.pinel@sintef.no>", "Lars Hellemo <lars.hellemo@sintef.no>, Konstantin Löffler <kl@wip.tu-berlin.de>"]
 
 [deps]
@@ -28,7 +28,7 @@ DataFrames = "^1.3.4"
 DocumenterTools = "^0.1"
 Downloads = "^1.5"
 DuckDB = "1.5.2"
-HiGHS = "^1.19"
+HiGHS = "1.22"
 Ipopt = "^1.11"
 JuMP = "^1.11"
 LibGit2 = "^1.9"

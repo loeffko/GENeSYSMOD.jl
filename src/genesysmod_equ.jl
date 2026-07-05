@@ -250,6 +250,14 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
   end
 
   TagTimeIndependentFuel = CanFuelBeUsedOrDemanded.*(1 .- CanFuelBeProduced)
+  # On top of the derived tag, Par_TagTimeIndependentFuel marks additional fuels
+  # as time-independent via input data (public repo #45 - replaces the old
+  # hard-coded override lists).
+  for f ∈ 𝓕
+    if Params.TagTimeIndependentFuel[f] == 1
+      TagTimeIndependentFuel[:,f,:] .= 1
+    end
+  end
 
   IgnoreFuel = JuMP.Containers.DenseAxisArray(zeros(length(𝓨), length(𝓕), length(𝓡)), 𝓨, 𝓕, 𝓡)
   for y ∈ 𝓨 for f ∈ 𝓕 for r ∈ 𝓡
