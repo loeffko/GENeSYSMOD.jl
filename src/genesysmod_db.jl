@@ -150,7 +150,10 @@ Creates the table from the DataFrame schema on first use. INSERT BY NAME, so
 column order may differ between runs; a genuinely different schema errors —
 drop the table (or delete the db file) after structural changes.
 """
-function _db_write_scenario!(con, table, df::DataFrame, scenario::AbstractString)
+function _db_write_scenario!(con, table, df::DataFrame, scenario::AbstractString;
+                             extra_key=())
+    # extra_key: additional (column => value) purge keys beyond Scenario, e.g.
+    # ("WeatherYear" => wy,) so cross-weather-year dispatch rows coexist.
     isempty(df) && return
     tq = _quote_ident(table)
     reg = "df_" * string(table)
@@ -158,7 +161,9 @@ function _db_write_scenario!(con, table, df::DataFrame, scenario::AbstractString
     try
         DBInterface.execute(con, "BEGIN TRANSACTION")
         if _table_exists(con, table)
-            DBInterface.execute(con, "DELETE FROM $tq WHERE Scenario = ?", [scenario])
+            where_sql = "Scenario = ?" * join([" AND $(_quote_ident(k)) = ?" for (k, _) in extra_key])
+            DBInterface.execute(con, "DELETE FROM $tq WHERE " * where_sql,
+                                vcat([scenario], [v for (_, v) in extra_key]))
             DBInterface.execute(con, "INSERT INTO $tq BY NAME SELECT * FROM $(_quote_ident(reg))")
         else
             DBInterface.execute(con, "CREATE TABLE $tq AS SELECT * FROM $(_quote_ident(reg))")

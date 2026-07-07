@@ -505,6 +505,25 @@ One-time in-place migration of a pre-Unit-column dispatch database: adds the
 old raw dual unit (MEUR/GWh) to EUR/MWh (x1000). Legacy rows are identified by
 `Unit IS NULL`, so the migration is idempotent and never touches new rows.
 """
+function _migrate_dispatch_weatheryear!(con)
+    # Cross-weather-year dispatch: hourly + summary tables carry a WeatherYear
+    # column (the timeseries year the dispatch ran against). Old rows are
+    # backfilled from the scenario label (fel2026_<sens>_<step>_<wy>[_vN]),
+    # whose weather year the pre-column runs always used.
+    for t in ("dispatch_generation", "dispatch_storage", "dispatch_trade",
+              "dispatch_balance", "dispatch_combined", "dispatch_summary",
+              "dispatch_gen_annual")
+        _table_exists(con, t) || continue
+        cols = DataFrame(DBInterface.execute(con,
+            "SELECT column_name FROM information_schema.columns WHERE table_name = ?", [t])).column_name
+        "WeatherYear" ∈ cols && continue
+        DBInterface.execute(con, "ALTER TABLE $(_quote_ident(t)) ADD COLUMN WeatherYear VARCHAR")
+        DBInterface.execute(con, "UPDATE $(_quote_ident(t)) SET WeatherYear = " *
+            "regexp_extract(Scenario, '_(20[0-9][0-9])(_v[0-9]+)?\$', 1) WHERE WeatherYear IS NULL")
+        println("  dispatch db: migrated $(t) (added WeatherYear, backfilled from scenario label)")
+    end
+end
+
 function _migrate_dispatch_units!(con)
     for t in ("dispatch_generation", "dispatch_storage", "dispatch_trade",
               "dispatch_balance", "dispatch_combined")
@@ -526,21 +545,23 @@ function _migrate_dispatch_units!(con)
     end
 end
 
-function write_dispatch_year_db(dispatch_db, scenario, year, Switch, Sets, disp, var,
+function write_dispatch_year_db(dispatch_db, scenario, year, weather_year, Switch, Sets, disp, var,
                                 H, demand, balance, V)
     con = _db_connect(dispatch_db)
-    sc = String(scenario); yr = Int(year)
+    sc = String(scenario); yr = Int(year); wy = String(weather_year)
     _migrate_dispatch_units!(con)
+    _migrate_dispatch_weatheryear!(con)
     function put(table, df)
         isempty(df) && return
         out = _with_run_context(df, Switch, sc)
         insertcols!(out, 5, :Year => fill(yr, nrow(out)))
+        insertcols!(out, 6, :WeatherYear => fill(wy, nrow(out)))
         tq = _quote_ident(table); reg = "df_" * table
         DuckDB.register_data_frame(con, out, reg)
         try
             DBInterface.execute(con, "BEGIN TRANSACTION")
             if _table_exists(con, table)
-                DBInterface.execute(con, "DELETE FROM $tq WHERE Scenario = ? AND Year = ?", [sc, yr])
+                DBInterface.execute(con, "DELETE FROM $tq WHERE Scenario = ? AND Year = ? AND WeatherYear = ?", [sc, yr, wy])
                 DBInterface.execute(con, "INSERT INTO $tq BY NAME SELECT * FROM $(_quote_ident(reg))")
             else
                 DBInterface.execute(con, "CREATE TABLE $tq AS SELECT * FROM $(_quote_ident(reg))")
@@ -621,33 +642,37 @@ Build a short per-year summary for `scenario` from the just-written dispatch
 tables, print it, and persist it to `genesysmod_dispatch_results.duckdb`
 (`dispatch_summary`, `dispatch_gen_annual`) and to CSV in `resultdir`.
 """
-function write_dispatch_summary(dispatch_db, resultdir, scenario, model_region, emissionPathway, emissionScenario)
+function write_dispatch_summary(dispatch_db, resultdir, scenario, weather_year, model_region, emissionPathway, emissionScenario)
     con = _db_connect(dispatch_db)
-    sc = String(scenario)
-    q(s) = DataFrame(DBInterface.execute(con, s, [sc]))
+    sc = String(scenario); wy = String(weather_year)
+    _migrate_dispatch_weatheryear!(con)
+    q(s) = DataFrame(DBInterface.execute(con, s, [sc, wy]))
     summ = q("SELECT Year, round(sum(Demand),0) AS Demand_GWh, " *
              "round(sum(Curtailment),0) AS Curtailment_GWh, round(sum(Unserved),1) AS Unserved_GWh, " *
              "round(100*sum(Unserved)/nullif(sum(Demand),0),3) AS Unserved_pct, " *
              # Price column is already EUR/MWh (converted at write; legacy rows migrated)
              "round(avg(Price),1) AS AvgPrice_EURMWh, round(max(Price),0) AS MaxPrice_EURMWh " *
-             "FROM dispatch_balance WHERE Scenario = ? GROUP BY Year ORDER BY Year")
+             "FROM dispatch_balance WHERE Scenario = ? AND WeatherYear = ? GROUP BY Year ORDER BY Year")
     if isempty(summ)
         @warn "dispatch summary: no rows for scenario $(sc)"; return summ
     end
-    gentot = q("SELECT Year, round(sum(Value),0) AS Generation_GWh FROM dispatch_generation WHERE Scenario = ? GROUP BY Year")
+    gentot = q("SELECT Year, round(sum(Value),0) AS Generation_GWh FROM dispatch_generation WHERE Scenario = ? AND WeatherYear = ? GROUP BY Year")
     summ = sort!(leftjoin(summ, gentot, on=:Year), :Year)
     genann = q("SELECT Year, Technology, round(sum(Value),0) AS Generation_GWh " *
-               "FROM dispatch_generation WHERE Scenario = ? GROUP BY Year, Technology ORDER BY Year, Generation_GWh DESC")
+               "FROM dispatch_generation WHERE Scenario = ? AND WeatherYear = ? GROUP BY Year, Technology ORDER BY Year, Generation_GWh DESC")
     # CSV (clean — no context columns)
-    CSV.write(joinpath(resultdir, "dispatch_summary_$(sc).csv"), summ)
-    CSV.write(joinpath(resultdir, "dispatch_gen_annual_$(sc).csv"), genann)
+    lbl_wy = something(match(r"_(20\d\d)(?:_v\d+)?$", sc), (; captures=[""])).captures[1]
+    fsuf = (isempty(wy) || wy == lbl_wy) ? "" : "_wy$(wy)"
+    CSV.write(joinpath(resultdir, "dispatch_summary_$(sc)$(fsuf).csv"), summ)
+    CSV.write(joinpath(resultdir, "dispatch_gen_annual_$(sc)$(fsuf).csv"), genann)
     # DB (scenario-keyed, with run-context columns)
     ctx(df) = (out = copy(df); insertcols!(out, 1,
-        :Scenario => fill(sc, nrow(out)), :ModelRegion => fill(model_region, nrow(out)),
+        :Scenario => fill(sc, nrow(out)), :WeatherYear => fill(wy, nrow(out)),
+        :ModelRegion => fill(model_region, nrow(out)),
         :Pathway => fill(emissionPathway, nrow(out)),
         :PathwayScenario => fill("$(emissionPathway)_$(emissionScenario)", nrow(out))); out)
-    _db_attempt(() -> _db_write_scenario!(con, "dispatch_summary", ctx(summ), sc), "dispatch_summary")
-    _db_attempt(() -> _db_write_scenario!(con, "dispatch_gen_annual", ctx(genann), sc), "dispatch_gen_annual")
+    _db_attempt(() -> _db_write_scenario!(con, "dispatch_summary", ctx(summ), sc; extra_key=("WeatherYear" => wy,)), "dispatch_summary")
+    _db_attempt(() -> _db_write_scenario!(con, "dispatch_gen_annual", ctx(genann), sc; extra_key=("WeatherYear" => wy,)), "dispatch_gen_annual")
     # print
     println("\n=== DISPATCH SUMMARY ($(sc)) ===")
     show(summ, allrows=true, allcols=true); println()
@@ -670,6 +695,7 @@ fixed capacities from the investment scenario `scenario` in
 `genesysmod_dispatch_results.duckdb` (keyed Scenario/Year/Region/Hour).
 """
 function genesysmod_dispatch_fullyear(; years=[2025,2030,2040], scenario,
+        weather_year="",
         model_region="north_america", data_base_region="California",
         data_file, hourly_data_file, allfuels_data_file="", switch_power_only_mode=1,
         inputdir, resultdir, solver, DNLPsolver,
@@ -680,6 +706,15 @@ function genesysmod_dispatch_fullyear(; years=[2025,2030,2040], scenario,
 
     results_db  = _results_db_path_from(resultdir)
     dispatch_db = _dispatch_db_path(resultdir)
+    # Weather year of THIS dispatch (the hourly file's year) - the investment
+    # solution in `scenario` may have been built on a different one
+    # (cross-weather-year dispatch). Derived from hourly_data_file if not given;
+    # keyed into every dispatch table as the WeatherYear column.
+    wy = String(weather_year)
+    if isempty(wy)
+        m = match(r"_(20\d\d)$", String(hourly_data_file))
+        wy = m === nothing ? "" : String(m.captures[1])
+    end
     dcfg = read_dispatch_config(inputdir, dispatch_data_file)
     summary = Dict{Int,Any}()
     for year ∈ years
@@ -700,7 +735,7 @@ function genesysmod_dispatch_fullyear(; years=[2025,2030,2040], scenario,
             @warn "year $(year): solver did not certify optimality ($(st)); writing the feasible solution."
         if feasible   # write whenever a feasible solution exists (incl. sub-optimal barrier)
             try
-                ng, ns, nb, nt = write_dispatch_year_db(dispatch_db, scenario, year,
+                ng, ns, nb, nt = write_dispatch_year_db(dispatch_db, scenario, year, wy,
                     switch, Sets, disp, var, H, demand, balance, V)
                 summary[year] = (status=st, generation_rows=ng, storage_rows=ns, balance_rows=nb, trade_rows=nt)
                 println("  wrote: $(ng) gen, $(ns) storage, $(nb) balance, $(nt) trade rows")
@@ -714,7 +749,7 @@ function genesysmod_dispatch_fullyear(; years=[2025,2030,2040], scenario,
     end
     # short per-run summary -> console + dispatch DB + CSV
     try
-        write_dispatch_summary(dispatch_db, resultdir, scenario, model_region, emissionPathway, emissionScenario)
+        write_dispatch_summary(dispatch_db, resultdir, scenario, wy, model_region, emissionPathway, emissionScenario)
     catch e
         @warn "dispatch summary failed" exception=e
     end
