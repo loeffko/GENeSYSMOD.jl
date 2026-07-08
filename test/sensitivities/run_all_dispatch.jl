@@ -11,7 +11,7 @@ const HOURSTEP = 1
 const VERSION  = ""
 const DISPATCH_WEATHER_YEARS = ["2015"]
 const DISPATCH_YEARS = [2025, 2030, 2040]
-const SENSITIVITIES = ["base", "dc_low", "dc_high", "dc_high_no_sofc", "dc_high_limitless", "recession",
+const SENSITIVITIES = ["base", "dc_low", "dc_high", "dc_high_limitless", "recession",
                        "bess_e2p_6h", "bess_e2p_8h", "bess_cost_low", "bess_cost_low_6h", "bess_cost_low_8h", "btm_lag",
                        "economic", "grid_low", "grid_high"]
 # ----------------------------------------------------------------------------

@@ -12,7 +12,7 @@ const DAYSTEP  = 2          # nthhour = DAYSTEP*24 + HOURSTEP  (2/1 -> 49)
 const HOURSTEP = 1
 const VERSION  = ""         # rerun tag ("v2", "v3", ...); "" for the first run
 const WEATHER_YEARS = SENS_WEATHER_YEARS            # ["2012","2015","2017","2018"]
-const SENSITIVITIES = ["base", "dc_low", "dc_high", "dc_high_no_sofc", "dc_high_limitless", "recession",
+const SENSITIVITIES = ["base", "dc_low", "dc_high", "dc_high_limitless", "recession",
                        "bess_e2p_6h", "bess_e2p_8h", "bess_cost_low", "bess_cost_low_6h", "bess_cost_low_8h", "btm_lag",
                        "economic", "grid_low", "grid_high"]
 # The blessed fel2026_base_49_2015 run (v7: Canadian gas price + AF calibration,
