@@ -23,6 +23,7 @@ const SENS_MODEL_KWARGS = Dict(
     # dc_high: keep SC1 capital spreading, allow RE additions up to 20%/yr of
     # the ceiling (default 10%).
     "dc_high" => (set_new_res_capacity = 0.2,),
+    "dc_high_no_sofc" => (set_new_res_capacity = 0.2,),
     # dc_high_limitless: pacing mostly gone (the data side drops the build
     # caps too: gas 100 GW/yr, EGS 4 GW/yr, ERCOT funnel max x2, P_SOFC).
     # The RES-additions lift to 0.3 applies to ERCOT only - elsewhere the
