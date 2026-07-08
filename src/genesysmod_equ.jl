@@ -1237,9 +1237,9 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
         for r ∈ 𝓡
             @constraint(model, Vars.TotalStorageCapacityAnnual[s,𝓨[i],r] == (sum(Vars.NewStorageCapacity[s,yy,r] for yy ∈ 𝓨 if (Params.OperationalLifeStorage[s] >= 𝓨[i]-yy && 𝓨[i]-yy >= 0)) + Params.ResidualStorageCapacity[r,s,𝓨[i]]),
             base_name="S1_jl_TotalStorageCapacityAnnual|$(s)|$(𝓨[i])|$(r)")
-            @constraint(model, Vars.TotalStorageCapacityAnnual[s,𝓨[i],r] <= sum(Vars.TotalCapacityAnnual[𝓨[i],t,r] * Params.StorageE2PRatio[s]* 0.0036 * Switch.E2P_ratio_deviation_factor for (t,m) ∈ charge_tm[s] if Params.TechnologyToStorage[t,s,m,𝓨[i]]!=0),
+            @constraint(model, Vars.TotalStorageCapacityAnnual[s,𝓨[i],r] <= sum(Vars.TotalCapacityAnnual[𝓨[i],t,r] * Params.StorageE2PRatio[s,𝓨[i]]* 0.0036 * Switch.E2P_ratio_deviation_factor for (t,m) ∈ charge_tm[s] if Params.TechnologyToStorage[t,s,m,𝓨[i]]!=0),
             base_name="S7a_Add_E2PRatio_up|$(s)|$(𝓨[i])|$(r)")
-            @constraint(model, Vars.TotalStorageCapacityAnnual[s,𝓨[i],r] >= sum(Vars.TotalCapacityAnnual[𝓨[i],t,r] * Params.StorageE2PRatio[s]* 0.0036 *(1/Switch.E2P_ratio_deviation_factor) for (t,m) ∈ charge_tm[s] if Params.TechnologyToStorage[t,s,m,𝓨[i]]!=0),
+            @constraint(model, Vars.TotalStorageCapacityAnnual[s,𝓨[i],r] >= sum(Vars.TotalCapacityAnnual[𝓨[i],t,r] * Params.StorageE2PRatio[s,𝓨[i]]* 0.0036 *(1/Switch.E2P_ratio_deviation_factor) for (t,m) ∈ charge_tm[s] if Params.TechnologyToStorage[t,s,m,𝓨[i]]!=0),
             base_name="S7b_Add_E2PRatio_low|$(s)|$(𝓨[i])|$(r)")
         end
     end

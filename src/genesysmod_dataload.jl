@@ -489,7 +489,20 @@ function read_params(in_data, Sets, Switch, Tags)
     ModalSplitByFuelAndModalType = create_daa(in_data, "Par_ModalSplitByFuel", 𝓡, 𝓕, 𝓨, 𝓜𝓽)
 
     #StorageE2PRatio = nothing
-    StorageE2PRatio = create_daa(in_data, "Par_StorageE2PRatio", 𝓢)
+    # (Storage, Year) since the battery E2P ratio became year-dependent; sheets
+    # without a Year column (older datasets) are expanded to every model year.
+    StorageE2PRatio = let df = DataFrame(XLSX.gettable(in_data["Par_StorageE2PRatio"]; first_row=1))
+        if "Year" in names(df)
+            create_daa(in_data, "Par_StorageE2PRatio", 𝓢, 𝓨)
+        else
+            flat = create_daa(in_data, "Par_StorageE2PRatio", 𝓢)
+            A = JuMP.Containers.DenseAxisArray(zeros(length(𝓢), length(𝓨)), 𝓢, 𝓨)
+            for s ∈ 𝓢, y ∈ 𝓨
+                A[s, y] = flat[s]
+            end
+            A
+        end
+    end
     ModelPeriodEmissionLimit = create_daa(in_data, "Par_ModelPeriodEmissionLimit", 𝓔)
     RegionalModelPeriodEmissionLimit = create_daa(in_data, "Par_RegionalModelPeriodEmission", 𝓡, 𝓔)
     ModelPeriodExogenousEmission = create_daa(in_data, "Par_ModelPeriodExogenousEmissio", 𝓡, 𝓔)
