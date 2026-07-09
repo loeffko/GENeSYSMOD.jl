@@ -31,6 +31,18 @@ const SENS_MODEL_KWARGS = Dict(
                             set_new_res_capacity_region = Dict("ERCOT" => 0.3)),
 )
 
+# E2P deviation factor per sensitivity (storage-energy band = ratio x [1/f, f]).
+# base keeps 2 (the 2015 reference graphs used 2; e2p_6h/8h match it so the
+# RATIO path is the only lever); the cost_low family gets 3 so duration becomes
+# an economic choice; the pessimistic variant squeezes to 1.5. Everything else
+# keeps the v5 wave's 1.5.
+const SENS_E2P_FACTOR = Dict(
+    "base" => 2.0, "bess_e2p_6h" => 2.0, "bess_e2p_8h" => 2.0,
+    "bess_cost_low" => 3.0, "bess_cost_low_6h" => 3.0, "bess_cost_low_8h" => 3.0,
+    "bess_pessimistic" => 1.5,
+)
+const SENS_E2P_FACTOR_DEFAULT = 1.5
+
 "Scenario label for a sensitivity run."
 sens_label(sensitivity, daystep, hourstep, weather_year, version) =
     "fel2026_$(sensitivity)_$(daystep * 24 + hourstep)_$(weather_year)" *
@@ -59,7 +71,7 @@ function run_na_investment(; sensitivity="base", weather_year="2015",
         allfuels_data_file="RegularParameters_NorthAmerica_allFuels",
         switch_infeasibility_tech=WithInfeasibilityTechs(),
         switch_investLimit=1, switch_ccs=1, switch_ramping=1,
-        E2P_ratio_deviation_factor=1.5,
+        E2P_ratio_deviation_factor=get(SENS_E2P_FACTOR, sensitivity, SENS_E2P_FACTOR_DEFAULT),
         switch_weighted_emissions=1, switch_intertemporal=0,
         switch_base_year_bounds=0, switch_peaking_capacity=1,
         set_peaking_slack=0, set_peaking_minrun_share=0, set_peaking_res_cf=0.5,
