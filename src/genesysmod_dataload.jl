@@ -466,6 +466,12 @@ function read_params(in_data, Sets, Switch, Tags)
     GroupTotalAnnualMaxNewCapacity = "Par_GroupTotalAnnualMaxNewCap" ∈ XLSX.sheetnames(in_data) ?
         create_daa_init(in_data, "Par_GroupTotalAnnualMaxNewCap", 999999, 𝓣𝓼, 𝓡𝓼, 𝓨) :
         DenseArray(fill(999999.0, length(𝓣𝓼), length(𝓡𝓼), length(𝓨)), 𝓣𝓼, 𝓡𝓼, 𝓨)
+    # Aggregated interconnection budget (TrC4): max TotalTradeCapacity summed
+    # over all directed pairs inside a region subset, per fuel and year. Values
+    # are the sum of directed pair capacities (A->B and B->A count separately).
+    GroupAnnualMaxTradeCapacity = "Par_GroupAnnualMaxTradeCapacity" ∈ XLSX.sheetnames(in_data) ?
+        create_daa_init(in_data, "Par_GroupAnnualMaxTradeCapacity", 999999, 𝓡𝓼, 𝓕, 𝓨) :
+        DenseArray(fill(999999.0, length(𝓡𝓼), length(𝓕), length(𝓨)), 𝓡𝓼, 𝓕, 𝓨)
     # Per-fuel time-independence tag (Fuel, Value); optional sheet like the group
     # params — an absent sheet adds no extra time-independent fuels (public repo
     # #45 replaced the hard-coded override lists with this input parameter).
@@ -597,7 +603,7 @@ function read_params(in_data, Sets, Switch, Tags)
     StorageLevelStart,MinStorageCharge,
     OperationalLifeStorage,CapitalCostStorage,ResidualStorageCapacity,TechnologyToStorage,
     TechnologyFromStorage,StorageMaxCapacity,TotalAnnualMaxCapacity, NewCapacityExpansionStop,TotalAnnualMinCapacity,
-    GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,GroupTotalAnnualMaxNewCapacity,
+    GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,GroupTotalAnnualMaxNewCapacity,GroupAnnualMaxTradeCapacity,
     TagTimeIndependentFuel,
     AnnualSectoralEmissionLimit,TotalAnnualMaxCapacityInvestment,
     TotalAnnualMinCapacityInvestment,TotalTechnologyAnnualActivityUpperLimit,
@@ -710,6 +716,7 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     GroupTotalAnnualMaxCapacity = Params_Full.GroupTotalAnnualMaxCapacity[:,:,𝓨]
     GroupTotalAnnualMinCapacity = Params_Full.GroupTotalAnnualMinCapacity[:,:,𝓨]
     GroupTotalAnnualMaxNewCapacity = Params_Full.GroupTotalAnnualMaxNewCapacity[:,:,𝓨]
+    GroupAnnualMaxTradeCapacity = Params_Full.GroupAnnualMaxTradeCapacity[:,:,𝓨]
     TagTimeIndependentFuel = Params_Full.TagTimeIndependentFuel
     TotalTechnologyAnnualActivityUpperLimit = aggregate_daa(Params_Full.TotalTechnologyAnnualActivityUpperLimit, 𝓡, 𝓡_full, Sum(), 𝓣, 𝓨)
     TotalTechnologyAnnualActivityLowerLimit = aggregate_daa(Params_Full.TotalTechnologyAnnualActivityLowerLimit, 𝓡, 𝓡_full, Sum(), 𝓣, 𝓨)
@@ -784,7 +791,7 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     OperationalLifeStorage,CapitalCostStorage,ResidualStorageCapacity,TechnologyToStorage,
     TechnologyFromStorage,StorageMaxCapacity,TotalAnnualMaxCapacity,
     NewCapacityExpansionStop,TotalAnnualMinCapacity,
-    GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,GroupTotalAnnualMaxNewCapacity,
+    GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,GroupTotalAnnualMaxNewCapacity,GroupAnnualMaxTradeCapacity,
     TagTimeIndependentFuel,
     AnnualSectoralEmissionLimit,TotalAnnualMaxCapacityInvestment,
     TotalAnnualMinCapacityInvestment,TotalTechnologyAnnualActivityUpperLimit,

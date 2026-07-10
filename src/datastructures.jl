@@ -331,6 +331,12 @@ struct Parameters <: InputClass
     # a technology subset × region subset, per year. 999999 = no limit. Smooths the
     # build path of a tech group (e.g. EGS) via data, no per-tech/region hardcode.
     GroupTotalAnnualMaxNewCapacity ::JuMP.Containers.DenseAxisArray
+    # Aggregated upper limit on TotalTradeCapacity summed over every directed
+    # pair inside a region subset, per (RegionSubset, Fuel, Year) — an overall
+    # interconnection budget. Per-corridor %-pace caps throttle exactly the
+    # corridors an expansion scenario is about; this lets the optimiser choose
+    # which corridors consume the budget. 999999 = no limit. Optional sheet.
+    GroupAnnualMaxTradeCapacity ::JuMP.Containers.DenseAxisArray
     # Per-fuel time-independence tag (1 = treat the fuel's energy balance
     # annually, no per-timeslice balance). Optional input sheet.
     TagTimeIndependentFuel ::JuMP.Containers.DenseAxisArray

@@ -925,6 +925,28 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
       end
     end
   end
+
+  # TrC4: aggregated interconnection budget — TotalTradeCapacity summed over
+  # every directed pair inside a region subset (Tags.TagRegionToSubsets), per
+  # fuel and year, capped by GroupAnnualMaxTradeCapacity. Per-corridor %-pace
+  # caps throttle exactly the corridors an expansion scenario is about; the
+  # budget lets the optimiser choose which corridors use it. 999999 = no
+  # limit; the start year is pinned by TrC2a, so the cap applies after it.
+  # Investment-only like TCC3-TCC5 (dispatch fixes capacities; a
+  # region-restricted run only covers part of a subset).
+  for rs ∈ keys(Params.Tags.TagRegionToSubsets)
+    regs_in_subset = intersect(Params.Tags.TagRegionToSubsets[rs], 𝓡)
+    length(regs_in_subset) < 2 && continue
+    for f ∈ 𝓕, y ∈ 𝓨
+      (y > Switch.StartYear && Params.GroupAnnualMaxTradeCapacity[rs,f,y] < 999999) || continue
+      pairs = [(r,rr) for r ∈ regs_in_subset for rr ∈ regs_in_subset if (f,r,rr) ∈ Maps.Set_Fuel_Regions]
+      isempty(pairs) && continue
+      @constraint(model,
+        sum(Vars.TotalTradeCapacity[y,f,r,rr] for (r,rr) ∈ pairs)
+          <= Params.GroupAnnualMaxTradeCapacity[rs,f,y],
+        base_name="TrC4_GroupAnnualMaxTradeCapacity|$(y)|$(f)|$(rs)")
+    end
+  end
   end
   print("Cstr: Tot. Cap. : ",Dates.now()-start,"\n")
 
