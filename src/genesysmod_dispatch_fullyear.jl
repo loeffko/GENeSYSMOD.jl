@@ -24,9 +24,10 @@ Entry point: `genesysmod_dispatch_fullyear(; years, scenario, ...)`.
 
 const DISPATCH_RESULTS_DB_FILENAME = "genesysmod_dispatch_results.duckdb"
 const PJ_TO_GWH = 1000.0 / 3.6        # 277.78 — PJ → GWh (model energy is PJ; caps are GW)
-const DISP_MINACTIVITY = Dict("P_Hydro_Reservoir" => 0.15)   # must-run share of cap×AF
 const DISP_EPS = 1e-6                  # tie-break weight (suppress idle cycling/curtailment/wheeling)
-const DISP_VOLL = 10.0                 # value of lost load, MEUR/GWh (= 10 000 €/MWh); must exceed any generator VC
+const DISP_VOLL = 10.0                 # legacy/World-default value of lost load, MEUR/GWh (= 10 000
+                                       # EUR/MWh); per-region override via Par_DispatchVoLL
+# (must-run shares moved to data: Par_DispatchMinActivity in DispatchData_<region>.xlsx)
 # storage round-trip efficiency split convention (mirrors GAMS NE3: charge gains
 # (1+eff)/2, discharge pays 2/(1+eff)); StorageLosses = per-hour self-discharge.
 const DISP_STORAGE_LOSSES = Dict("S_Battery_Li-Ion" => 0.00417)   # ≈10%/day; others 0
@@ -69,8 +70,24 @@ struct DispatchCostConfig
     co2bench   ::Dict{String,Float64}                     # region -> free-allocation benchmark
                                                           # (tCO2/MWh; OBPS-style: only
                                                           # emissions ABOVE it pay the price)
+    # market-realism layer (all optional; absent sheets = neutral / legacy behavior)
+    minactivity ::Dict{Tuple{String,String},Float64}      # (region|World, tech) -> must-run share
+                                                          # of hourly available capacity (self-
+                                                          # committed coal, nuclear, cogen, hydro
+                                                          # min-flow)
+    bidadder   ::Dict{Tuple{String,String},Vector{Tuple{Int,Float64}}}
+                                                          # (region|World, tech) -> [(year, EUR/MWh)]
+                                                          # milestone-interpolated offer adder;
+                                                          # negative = production subsidy (PTC), sets
+                                                          # the curtailment-hour price floor
+    voll       ::Dict{String,Float64}                     # region -> value of lost load EUR/MWh
+                                                          # (World/absent -> DISP_VOLL)
+    reservereq ::Dict{String,Tuple{Float64,Float64}}      # region -> (share of hourly demand, GW floor)
+    ordc       ::Dict{String,Vector{Tuple{Float64,Float64}}} # region -> [(width share of req, EUR/MWh)]
+                                                          # piecewise reserve-shortage penalty
 end
-const _NEUTRAL_DISPATCH_CONFIG = DispatchCostConfig(Dict(), Dict(), Dict(), Dict(), Dict())
+const _NEUTRAL_DISPATCH_CONFIG = DispatchCostConfig(Dict(), Dict(), Dict(), Dict(), Dict(),
+                                                    Dict(), Dict(), Dict(), Dict(), Dict())
 
 # month of an hour-of-year (1..8760, non-leap); clamped for safety
 const _MONTH_END_HOUR = cumsum([31,28,31,30,31,30,31,31,30,31,30,31] .* 24)
@@ -125,10 +142,44 @@ function read_dispatch_config(inputdir, dispatch_data_file)
         end
     end
     foreach(v -> sort!(v, by=first), values(co2price))
+    # optional Region column helper: missing/empty -> 'World' default row
+    _reg(row, nms) = ("Region" ∈ nms && !ismissing(row.Region) &&
+                      !isempty(strip(string(row.Region)))) ? string(row.Region) : "World"
+    minactivity = Dict{Tuple{String,String},Float64}()
+    masheet = sheet("Par_DispatchMinActivity")
+    for r ∈ eachrow(masheet)
+        minactivity[(_reg(r, names(masheet)), string(r.Technology))] = Float64(r.Share)
+    end
+    bidadder = Dict{Tuple{String,String},Vector{Tuple{Int,Float64}}}()
+    basheet = sheet("Par_DispatchBidAdder")
+    for r ∈ eachrow(basheet)
+        push!(get!(bidadder, (_reg(r, names(basheet)), string(r.Technology)),
+                   Tuple{Int,Float64}[]), (Int(r.Year), Float64(r.Value)))
+    end
+    foreach(v -> sort!(v, by=first), values(bidadder))
+    voll = Dict{String,Float64}()
+    for r ∈ eachrow(sheet("Par_DispatchVoLL"))
+        voll[string(r.Region)] = Float64(r.Value)
+    end
+    reservereq = Dict{String,Tuple{Float64,Float64}}()
+    rrsheet = sheet("Par_DispatchReserveReq")
+    for r ∈ eachrow(rrsheet)
+        share = "ShareOfDemand" ∈ names(rrsheet) && !ismissing(r.ShareOfDemand) ? Float64(r.ShareOfDemand) : 0.0
+        gwfloor = "MinGW" ∈ names(rrsheet) && !ismissing(r.MinGW) ? Float64(r.MinGW) : 0.0
+        reservereq[string(r.Region)] = (share, gwfloor)
+    end
+    ordc = Dict{String,Vector{Tuple{Float64,Float64}}}()
+    for r ∈ eachrow(sheet("Par_DispatchORDC"))
+        push!(get!(ordc, string(r.Region), Tuple{Float64,Float64}[]),
+              (Float64(r.WidthShare), Float64(r.Price)))
+    end
     println("  dispatch: cost config from $(basename(path)) — " *
             "$(length(techclass)) tech classes, $(length(bins)) bin sets, " *
-            "$(length(fuelfactor)) fuel factors, $(length(co2price)) CO2 regions")
-    return DispatchCostConfig(techclass, bins, fuelfactor, co2price, co2bench)
+            "$(length(fuelfactor)) fuel factors, $(length(co2price)) CO2 regions, " *
+            "$(length(minactivity)) must-run rows, $(length(bidadder)) bid adders, " *
+            "$(length(voll)) VoLL rows, $(length(ordc)) ORDC curves")
+    return DispatchCostConfig(techclass, bins, fuelfactor, co2price, co2bench,
+                              minactivity, bidadder, voll, reservereq, ordc)
 end
 
 # class/fuel of a tech ("", "") when unmapped; bins for a tech (nothing = single)
@@ -151,10 +202,8 @@ function _dc_fuelmult(cfg, r, t, mon)
     end
     return 1.0
 end
-# regional CO2 price (EUR/t) at `year`: linear interpolation between milestone
-# years, clamped at the ends; region absent -> World -> 0.
-function _dc_co2(cfg, r, year)
-    ms = get(cfg.co2price, r, get(cfg.co2price, "World", Tuple{Int,Float64}[]))
+# linear interpolation between sorted (year, value) milestones, clamped at the ends
+function _interp_milestones(ms, year)
     isempty(ms) && return 0.0
     year <= ms[1][1] && return ms[1][2]
     year >= ms[end][1] && return ms[end][2]
@@ -164,6 +213,17 @@ function _dc_co2(cfg, r, year)
     end
     return ms[end][2]
 end
+# regional CO2 price (EUR/t) at `year`; region absent -> World -> 0.
+_dc_co2(cfg, r, year) =
+    _interp_milestones(get(cfg.co2price, r, get(cfg.co2price, "World", Tuple{Int,Float64}[])), year)
+# must-run share of hourly available capacity; exact region -> World -> 0
+_dc_minact(cfg, r, t) = get(cfg.minactivity, (r, t), get(cfg.minactivity, ("World", t), 0.0))
+# offer adder EUR/MWh at `year` (negative = subsidy); (region, tech) -> World -> 0
+_dc_bidadder(cfg, r, t, year) =
+    _interp_milestones(get(cfg.bidadder, (r, t),
+                           get(cfg.bidadder, ("World", t), Tuple{Int,Float64}[])), year)
+# value of lost load EUR/MWh; region -> World -> legacy DISP_VOLL (10 000)
+_dc_voll(cfg, r) = get(cfg.voll, r, get(cfg.voll, "World", DISP_VOLL * 1000.0))
 
 # ---------------------------------------------------------------------------
 # Build a Switch for a full-resolution (elmod_nthhour=1) all-region data load.
@@ -348,7 +408,18 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
     month_of_ts = Dict(h => _month_of_hour(ceil(Int, i * 8760 / nts)) for (i,h) ∈ enumerate(𝓛))
     basecost(r,d,h) = vc(r,d) * _dc_fuelmult(dcfg, r, d, month_of_ts[h]) + co2part(r,d)
 
-    infeas_pen = DISP_VOLL   # value of lost load (MEUR/GWh); price ceiling in unserved hours
+    # per-region value of lost load (MEUR/GWh conversion: EUR/MWh x 1e-3); the
+    # nodal price cap in unserved hours (data-driven, Par_DispatchVoLL)
+    infeas_pen(r) = _dc_voll(dcfg, r) * 1.0e-3
+    # offer adder (subsidy) per (region, tech), MEUR/GWh; negative = PTC-style
+    # revenue. Applied to dispatchable AND variable techs.
+    adder = Dict((r,t) => _dc_bidadder(dcfg, r, t, Int(year)) * 1.0e-3
+                 for r ∈ 𝓡 for t ∈ vcat(disp, var))
+    has_adders = any(v != 0.0 for v ∈ values(adder))
+    # curtailment cost: the deepest subsidy present (spilling subsidized RE
+    # forgoes it), so the generic dump variable never undercuts the subsidized
+    # resources' own spill; neutral (= tie-break EPS) when no adders configured.
+    curt_cost = has_adders ? maximum(abs(v) for v ∈ values(adder)) : DISP_EPS
 
     model = JuMP.Model(solver)
     H = collect(𝓛); nH = length(H)
@@ -398,7 +469,10 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
     #     overstating scarcity vs the fleet the investment actually built.) ---
     for r ∈ 𝓡, d ∈ disp
         if cap[d,r] > 0 && af(r,d) > 0
-            mar = get(DISP_MINACTIVITY, d, 0.0)
+            # must-run share from Par_DispatchMinActivity (self-committed coal,
+            # nuclear, cogen, hydro min-flow); capped at AF so the hourly floor
+            # can never conflict with the annual availability budget
+            mar = min(_dc_minact(dcfg, r, d), af(r,d))
             for h ∈ H
                 capE = cap[d,r] * cf(r,d,h) * dur(h)   # GWh available in timeslice h
                 @constraint(model, g[r,d,h] <= capE)
@@ -411,9 +485,18 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
         end
     end
 
-    # --- variable RE: fixed to capacity × CF × hours ---
+    # --- variable RE: without bid adders, fixed to capacity × CF × hours (spill
+    #     via the generic curt variable — legacy behavior). With adders, vg is
+    #     upper-bounded instead: spilling a subsidized resource then forgoes its
+    #     adder revenue, so the curtailment-hour price floor lands at −adder
+    #     (PTC-style negative pricing) and unsubsidized RE spills first. ---
     for r ∈ 𝓡, v ∈ var, h ∈ H
-        fix(vg[r,v,h], max(0.0, cap[v,r] * cf(r,v,h) * dur(h)); force=true)
+        pot = max(0.0, cap[v,r] * cf(r,v,h) * dur(h))
+        if has_adders
+            set_upper_bound(vg[r,v,h], pot)
+        else
+            fix(vg[r,v,h], pot; force=true)
+        end
     end
 
     # --- ramping (chronological): Δgen between consecutive timeslices ---
@@ -471,21 +554,56 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
         + sum(flow[rr,r,h] for rr ∈ 𝓡)
         == demand[(r,h)] + curt[r,h])
 
+    # --- operating-reserve shortage (ORDC-lite; Par_DispatchReserveReq +
+    #     Par_DispatchORDC). Hourly requirement = max(share x demand, GW floor);
+    #     provided by dispatchable headroom (cap x CF - g) + storage discharge
+    #     headroom; the piecewise shortage slacks price scarcity into the energy
+    #     dual via co-optimization (the missing $200-2000 mid-tail). Regions
+    #     without config rows get no constraint (neutral default). ---
+    resregs = [r for r ∈ 𝓡 if haskey(dcfg.reservereq, r) && haskey(dcfg.ordc, r) &&
+                              !isempty(dcfg.ordc[r])]
+    @variable(model, rshort[r ∈ resregs, k ∈ 1:length(dcfg.ordc[r]), h ∈ H] >= 0)
+    for r ∈ resregs
+        share, gwfloor = dcfg.reservereq[r]
+        segs = dcfg.ordc[r]
+        for h ∈ H
+            req = max(share * demand[(r,h)], gwfloor * dur(h))
+            req <= 0 && continue
+            for (k,(w,_)) ∈ enumerate(segs)
+                set_upper_bound(rshort[r,k,h], w * req)
+            end
+            @constraint(model,
+                sum(cap[d,r]*cf(r,d,h)*dur(h) - g[r,d,h] for d ∈ disp
+                    if cap[d,r] > 0 && af(r,d) > 0; init=0.0)
+              + sum(spow(r,s)*dur(h) - sout[r,s,h] + sin[r,s,h] for s ∈ Sets.Storage; init=0.0)
+              + sum(rshort[r,k,h] for k ∈ 1:length(segs))
+              >= req)
+        end
+    end
+    isempty(resregs) || println("  dispatch: ORDC-lite reserve curves active in $(length(resregs)) regions")
+
     # --- objective ---
     # unbinned fleets pay basecost on g; binned fleets pay basecost x tranche
     # multiplier on gb (their g carries no direct cost — it equals sum(gb)).
     # The endogenous-emission term below stays on g for ALL fleets (it is the
     # model's own EmissionsPenalty machinery, separate from the regional
     # dispatch-config carbon price inside basecost).
+    # Market-realism terms: offer adders on g and vg (negative = subsidy),
+    # curtailment priced at the deepest subsidy, per-region VoLL, and the
+    # ORDC shortage penalties (EUR/MWh x 1e-3 -> MEUR/GWh).
     @objective(model, Min,
         sum(g[r,d,h]*basecost(r,d,h) for r ∈ 𝓡 for d ∈ disp for h ∈ H if (r,d) ∉ binnedset)
       + sum(gb[(r,d),k,h]*basecost(r,d,h)*_dc_bins(dcfg,d)[k][2]
             for (r,d) ∈ binned for k ∈ 1:length(_dc_bins(dcfg,d)) for h ∈ H)
       + sum(g[r,d,h]*emisCO2(r,d)*co2price(r) for r ∈ 𝓡 for d ∈ disp for h ∈ H)
+      + sum(g[r,d,h]*adder[(r,d)] for r ∈ 𝓡 for d ∈ disp for h ∈ H if adder[(r,d)] != 0.0)
+      + sum(vg[r,v,h]*adder[(r,v)] for r ∈ 𝓡 for v ∈ var for h ∈ H if adder[(r,v)] != 0.0)
       + DISP_EPS*sum(sout[r,s,h] for r ∈ 𝓡 for s ∈ Sets.Storage for h ∈ H)
-      + DISP_EPS*sum(curt[r,h] for r ∈ 𝓡 for h ∈ H)
+      + curt_cost*sum(curt[r,h] for r ∈ 𝓡 for h ∈ H)
       + DISP_EPS*sum(fpos[r,rr,h]+fneg[r,rr,h] for r ∈ 𝓡 for rr ∈ 𝓡 for h ∈ H)
-      + infeas_pen*sum(infe[r,h] for r ∈ 𝓡 for h ∈ H))
+      + sum(infeas_pen(r)*infe[r,h] for r ∈ 𝓡 for h ∈ H)
+      + 1.0e-3*sum(dcfg.ordc[r][k][2]*rshort[r,k,h]
+                   for r ∈ resregs for k ∈ 1:length(dcfg.ordc[r]) for h ∈ H))
 
     for (k,v) ∈ solver_attr
         try; set_optimizer_attribute(model, k, v); catch e; @warn "attr $k=$v" exception=e; end
@@ -597,7 +715,13 @@ function write_dispatch_year_db(dispatch_db, scenario, year, weather_year, Switc
         netimp = sum(value(V.flow[rr,r,h]) for rr ∈ Sets.Region_full; init=0.0)
         # dual is MEUR/GWh (objective MEUR, balance GWh); x1000 -> EUR/MWh
         price = dual(balance[r,h]) * 1000.0
-        push!(bal, (r, Int(h), round(demand[(r,h)],digits=4), round(value(V.curt[r,h]),digits=4),
+        # curtailment = generic dump + variable-RE spill (vg below its potential;
+        # nonzero only when bid adders un-fix vg — legacy runs report curt alone)
+        respill = sum(is_fixed(V.vg[r,v,h]) ? 0.0 :
+                      max(0.0, upper_bound(V.vg[r,v,h]) - value(V.vg[r,v,h]))
+                      for v ∈ var; init=0.0)
+        push!(bal, (r, Int(h), round(demand[(r,h)],digits=4),
+                    round(value(V.curt[r,h]) + respill,digits=4),
                     round(value(V.infe[r,h]),digits=4), round(netimp,digits=4), round(price,digits=4)))
     end
     bal[!, :Unit] .= "GWh (Price: EUR/MWh)"
