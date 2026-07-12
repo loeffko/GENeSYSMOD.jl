@@ -85,12 +85,15 @@ struct DispatchCostConfig
     reservereq ::Dict{String,Tuple{Float64,Float64}}      # region -> (share of hourly demand, GW floor)
     ordc       ::Dict{String,Vector{Tuple{Float64,Float64}}} # region -> [(width share of req, EUR/MWh)]
                                                           # piecewise reserve-shortage penalty
-    storagebins ::Dict{String,Vector{Tuple{Float64,Float64}}} # storage -> [(power share, duration h)]
-                                                          # split one aggregate storage into duration
-                                                          # tranches with independent SoC (fleet
-                                                          # duration mix, e.g. 1h/2h/4h/8h BESS);
-                                                          # bin energy = share x power x hours,
-                                                          # OVERRIDING the investment S_ energy
+    storagebins ::Dict{Tuple{String,Float64},Vector{Tuple{Int,Float64}}}
+                                                          # (storage, duration h) -> [(year, power
+                                                          # share)] milestones: split one aggregate
+                                                          # storage into duration tranches with
+                                                          # independent SoC (fleet duration mix,
+                                                          # e.g. 1h/2h/4h/8h BESS, evolving by
+                                                          # year); bin energy = share x power x
+                                                          # hours, OVERRIDING the investment S_
+                                                          # energy. Year absent/0 = all years.
 end
 const _NEUTRAL_DISPATCH_CONFIG = DispatchCostConfig(Dict(), Dict(), Dict(), Dict(), Dict(),
                                                     Dict(), Dict(), Dict(), Dict(), Dict(), Dict())
@@ -179,22 +182,20 @@ function read_dispatch_config(inputdir, dispatch_data_file)
         push!(get!(ordc, string(r.Region), Tuple{Float64,Float64}[]),
               (Float64(r.WidthShare), Float64(r.Price)))
     end
-    storagebins = Dict{String,Vector{Tuple{Float64,Float64}}}()
-    for r ∈ eachrow(sheet("Par_DispatchStorageBins"))
-        push!(get!(storagebins, string(r.Storage), Tuple{Float64,Float64}[]),
-              (Float64(r.PowerShare), Float64(r.Hours)))
+    storagebins = Dict{Tuple{String,Float64},Vector{Tuple{Int,Float64}}}()
+    sbsheet = sheet("Par_DispatchStorageBins")
+    for r ∈ eachrow(sbsheet)
+        y = "Year" ∈ names(sbsheet) && !ismissing(r.Year) ? Int(r.Year) : 0   # 0 = all-year row
+        push!(get!(storagebins, (string(r.Storage), Float64(r.Hours)), Tuple{Int,Float64}[]),
+              (y, Float64(r.PowerShare)))
     end
-    for (s, v) ∈ storagebins
-        tot = sum(first.(v))
-        abs(tot - 1.0) > 1e-6 && @warn "DispatchStorageBins: power shares for $(s) sum to $(tot), renormalising"
-        tot > 0 && (storagebins[s] = [(sh/tot, hrs) for (sh,hrs) ∈ v])
-    end
+    foreach(v -> sort!(v, by=first), values(storagebins))
     println("  dispatch: cost config from $(basename(path)) — " *
             "$(length(techclass)) tech classes, $(length(bins)) bin sets, " *
             "$(length(fuelfactor)) fuel factors, $(length(co2price)) CO2 regions, " *
             "$(length(minactivity)) must-run rows, $(length(bidadder)) bid adders, " *
             "$(length(voll)) VoLL rows, $(length(ordc)) ORDC curves, " *
-            "$(length(storagebins)) storage-bin sets")
+            "$(length(unique(first.(collect(keys(storagebins)))))) binned storages")
     return DispatchCostConfig(techclass, bins, fuelfactor, co2price, co2bench,
                               minactivity, bidadder, voll, reservereq, ordc, storagebins)
 end
@@ -241,6 +242,21 @@ _dc_bidadder(cfg, r, t, year) =
                            get(cfg.bidadder, ("World", t), Tuple{Int,Float64}[])), year)
 # value of lost load EUR/MWh; region -> World -> legacy DISP_VOLL (10 000)
 _dc_voll(cfg, r) = get(cfg.voll, r, get(cfg.voll, "World", DISP_VOLL * 1000.0))
+# duration-bin set for storage `s` at `year`: per-duration power shares are
+# milestone-interpolated (Year 0 rows apply to all years), zero-share bins are
+# dropped and the rest renormalised. Returns nothing when `s` has no bin rows.
+function _dc_storagebins(cfg, s, year)
+    hrs = sort!([h for (st, h) ∈ keys(cfg.storagebins) if st == s])
+    isempty(hrs) && return nothing
+    out = Tuple{Float64,Float64}[]
+    for h ∈ hrs
+        sh = _interp_milestones(cfg.storagebins[(s, h)], year)
+        sh > 1e-9 && push!(out, (sh, h))
+    end
+    isempty(out) && return nothing
+    tot = sum(first.(out))
+    return [(sh / tot, h) for (sh, h) ∈ out]
+end
 
 # ---------------------------------------------------------------------------
 # Build a Switch for a full-resolution (elmod_nthhour=1) all-region data load.
@@ -450,7 +466,7 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
     sbins = String[]
     sbmap = Dict{String,Tuple{String,Float64,Float64}}()   # sid -> (parent, power share, hours; <0 = investment energy)
     for s ∈ Sets.Storage
-        binsdef = get(dcfg.storagebins, s, nothing)
+        binsdef = _dc_storagebins(dcfg, s, Int(year))
         if binsdef === nothing
             push!(sbins, s); sbmap[s] = (s, 1.0, -1.0)
         else
