@@ -85,9 +85,15 @@ struct DispatchCostConfig
     reservereq ::Dict{String,Tuple{Float64,Float64}}      # region -> (share of hourly demand, GW floor)
     ordc       ::Dict{String,Vector{Tuple{Float64,Float64}}} # region -> [(width share of req, EUR/MWh)]
                                                           # piecewise reserve-shortage penalty
+    storagebins ::Dict{String,Vector{Tuple{Float64,Float64}}} # storage -> [(power share, duration h)]
+                                                          # split one aggregate storage into duration
+                                                          # tranches with independent SoC (fleet
+                                                          # duration mix, e.g. 1h/2h/4h/8h BESS);
+                                                          # bin energy = share x power x hours,
+                                                          # OVERRIDING the investment S_ energy
 end
 const _NEUTRAL_DISPATCH_CONFIG = DispatchCostConfig(Dict(), Dict(), Dict(), Dict(), Dict(),
-                                                    Dict(), Dict(), Dict(), Dict(), Dict())
+                                                    Dict(), Dict(), Dict(), Dict(), Dict(), Dict())
 
 # month of an hour-of-year (1..8760, non-leap); clamped for safety
 const _MONTH_END_HOUR = cumsum([31,28,31,30,31,30,31,31,30,31,30,31] .* 24)
@@ -173,13 +179,24 @@ function read_dispatch_config(inputdir, dispatch_data_file)
         push!(get!(ordc, string(r.Region), Tuple{Float64,Float64}[]),
               (Float64(r.WidthShare), Float64(r.Price)))
     end
+    storagebins = Dict{String,Vector{Tuple{Float64,Float64}}}()
+    for r ∈ eachrow(sheet("Par_DispatchStorageBins"))
+        push!(get!(storagebins, string(r.Storage), Tuple{Float64,Float64}[]),
+              (Float64(r.PowerShare), Float64(r.Hours)))
+    end
+    for (s, v) ∈ storagebins
+        tot = sum(first.(v))
+        abs(tot - 1.0) > 1e-6 && @warn "DispatchStorageBins: power shares for $(s) sum to $(tot), renormalising"
+        tot > 0 && (storagebins[s] = [(sh/tot, hrs) for (sh,hrs) ∈ v])
+    end
     println("  dispatch: cost config from $(basename(path)) — " *
             "$(length(techclass)) tech classes, $(length(bins)) bin sets, " *
             "$(length(fuelfactor)) fuel factors, $(length(co2price)) CO2 regions, " *
             "$(length(minactivity)) must-run rows, $(length(bidadder)) bid adders, " *
-            "$(length(voll)) VoLL rows, $(length(ordc)) ORDC curves")
+            "$(length(voll)) VoLL rows, $(length(ordc)) ORDC curves, " *
+            "$(length(storagebins)) storage-bin sets")
     return DispatchCostConfig(techclass, bins, fuelfactor, co2price, co2bench,
-                              minactivity, bidadder, voll, reservereq, ordc)
+                              minactivity, bidadder, voll, reservereq, ordc, storagebins)
 end
 
 # class/fuel of a tech ("", "") when unmapped; bins for a tech (nothing = single)
@@ -425,14 +442,37 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
     H = collect(𝓛); nH = length(H)
     hidx = Dict(h => i for (i,h) ∈ enumerate(H))   # chronological order
 
+    # --- storage duration bins (Par_DispatchStorageBins): a configured storage
+    #     is split into tranches with independent SoC ("s#k"); bin energy =
+    #     power share x total power x duration hours, OVERRIDING the investment
+    #     S_ energy (fleet duration-mix realism). Unconfigured storages keep one
+    #     tranche with the investment energy (hours sentinel < 0). ---
+    sbins = String[]
+    sbmap = Dict{String,Tuple{String,Float64,Float64}}()   # sid -> (parent, power share, hours; <0 = investment energy)
+    for s ∈ Sets.Storage
+        binsdef = get(dcfg.storagebins, s, nothing)
+        if binsdef === nothing
+            push!(sbins, s); sbmap[s] = (s, 1.0, -1.0)
+        else
+            for (k,(sh,hrs)) ∈ enumerate(binsdef)
+                sid = "$(s)#$(k)"; push!(sbins, sid); sbmap[sid] = (s, sh, hrs)
+            end
+        end
+    end
+    spowb(r,sid) = sbmap[sid][2] * spow(r, sbmap[sid][1])
+    seneb(r,sid) = sbmap[sid][3] < 0 ? sbmap[sid][2] * sene(r, sbmap[sid][1]) :
+                                       sbmap[sid][3] * sbmap[sid][2] * spow(r, sbmap[sid][1])
+    any(v -> haskey(dcfg.storagebins, v[1]), values(sbmap)) &&
+        println("  dispatch: storage duration bins active — $(length(sbins)) tranches over $(length(Sets.Storage)) storages")
+
     # --- variables ---
     @variable(model, g[r ∈ 𝓡, d ∈ disp, H] >= 0)            # dispatchable gen (GWh)
     @variable(model, gup[r ∈ 𝓡, d ∈ disp, H] >= 0)
     @variable(model, gdn[r ∈ 𝓡, d ∈ disp, H] >= 0)
     @variable(model, vg[r ∈ 𝓡, v ∈ var, H] >= 0)            # variable gen (GWh)
-    @variable(model, sin[r ∈ 𝓡, s ∈ Sets.Storage, H] >= 0)  # storage charge (GWh)
-    @variable(model, sout[r ∈ 𝓡, s ∈ Sets.Storage, H] >= 0) # storage discharge (GWh)
-    @variable(model, soc[r ∈ 𝓡, s ∈ Sets.Storage, H] >= 0)  # state of charge (GWh)
+    @variable(model, sin[r ∈ 𝓡, s ∈ sbins, H] >= 0)         # storage charge (GWh)
+    @variable(model, sout[r ∈ 𝓡, s ∈ sbins, H] >= 0)        # storage discharge (GWh)
+    @variable(model, soc[r ∈ 𝓡, s ∈ sbins, H] >= 0)         # state of charge (GWh)
     @variable(model, curt[r ∈ 𝓡, H] >= 0)                   # curtailment (GWh)
     @variable(model, flow[r ∈ 𝓡, rr ∈ 𝓡, H])                # net flow r->rr (GWh), free
     @variable(model, fpos[r ∈ 𝓡, rr ∈ 𝓡, H] >= 0)
@@ -511,9 +551,10 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
         fix(gup[r,d,H[1]], 0.0; force=true); fix(gdn[r,d,H[1]], 0.0; force=true)
     end
 
-    # --- storage (cyclic SoC) ---
-    for r ∈ 𝓡, s ∈ Sets.Storage
-        p = spow(r,s); e = sene(r,s); ce = ceff(s); de = deff(s); loss = sloss(s)
+    # --- storage (cyclic SoC; per duration tranche) ---
+    for r ∈ 𝓡, s ∈ sbins
+        par = sbmap[s][1]
+        p = spowb(r,s); e = seneb(r,s); ce = ceff(par); de = deff(par); loss = sloss(par)
         if p > 0 && e > 0
             for i ∈ 1:nH
                 h = H[i]
@@ -550,7 +591,7 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
     # --- energy balance (its dual = nodal price) ---
     @constraint(model, balance[r ∈ 𝓡, h ∈ H],
         sum(g[r,d,h] for d ∈ disp) + sum(vg[r,v,h] for v ∈ var) + infe[r,h]
-        + sum(sout[r,s,h] - sin[r,s,h] for s ∈ Sets.Storage)
+        + sum(sout[r,s,h] - sin[r,s,h] for s ∈ sbins)
         + sum(flow[rr,r,h] for rr ∈ 𝓡)
         == demand[(r,h)] + curt[r,h])
 
@@ -575,7 +616,7 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
             @constraint(model,
                 sum(cap[d,r]*cf(r,d,h)*dur(h) - g[r,d,h] for d ∈ disp
                     if cap[d,r] > 0 && af(r,d) > 0; init=0.0)
-              + sum(spow(r,s)*dur(h) - sout[r,s,h] + sin[r,s,h] for s ∈ Sets.Storage; init=0.0)
+              + sum(spowb(r,s)*dur(h) - sout[r,s,h] + sin[r,s,h] for s ∈ sbins; init=0.0)
               + sum(rshort[r,k,h] for k ∈ 1:length(segs))
               >= req)
         end
@@ -598,7 +639,7 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
       + sum(g[r,d,h]*emisCO2(r,d)*co2price(r) for r ∈ 𝓡 for d ∈ disp for h ∈ H)
       + sum(g[r,d,h]*adder[(r,d)] for r ∈ 𝓡 for d ∈ disp for h ∈ H if adder[(r,d)] != 0.0)
       + sum(vg[r,v,h]*adder[(r,v)] for r ∈ 𝓡 for v ∈ var for h ∈ H if adder[(r,v)] != 0.0)
-      + DISP_EPS*sum(sout[r,s,h] for r ∈ 𝓡 for s ∈ Sets.Storage for h ∈ H)
+      + DISP_EPS*sum(sout[r,s,h] for r ∈ 𝓡 for s ∈ sbins for h ∈ H)
       + curt_cost*sum(curt[r,h] for r ∈ 𝓡 for h ∈ H)
       + DISP_EPS*sum(fpos[r,rr,h]+fneg[r,rr,h] for r ∈ 𝓡 for rr ∈ 𝓡 for h ∈ H)
       + sum(infeas_pen(r)*infe[r,h] for r ∈ 𝓡 for h ∈ H)
@@ -610,7 +651,8 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
     end
     optimize!(model)
     return model, Sets, Params, disp, var, storage_power, H, hidx, demand, balance,
-           (g=g, vg=vg, sin=sin, sout=sout, soc=soc, curt=curt, flow=flow, infe=infe)
+           (g=g, vg=vg, sin=sin, sout=sout, soc=soc, curt=curt, flow=flow, infe=infe,
+            sbins=sbins, sbmap=sbmap)
 end
 
 # ---------------------------------------------------------------------------
@@ -702,8 +744,12 @@ function write_dispatch_year_db(dispatch_db, scenario, year, weather_year, Switc
     put("dispatch_generation", gen)
     # storage operation
     sto = DataFrame(Region=String[], Storage=String[], Hour=Int[], Charge=Float64[], Discharge=Float64[], SoC=Float64[])
+    # duration tranches ("s#k") aggregate back to their parent storage
+    sids_of = Dict(s => [sid for sid ∈ V.sbins if V.sbmap[sid][1] == s] for s ∈ Sets.Storage)
     for r ∈ Sets.Region_full, s ∈ Sets.Storage, h ∈ H
-        ci=value(V.sin[r,s,h]); di=value(V.sout[r,s,h]); sc_=value(V.soc[r,s,h])
+        ci = sum(value(V.sin[r,sid,h])  for sid ∈ sids_of[s]; init=0.0)
+        di = sum(value(V.sout[r,sid,h]) for sid ∈ sids_of[s]; init=0.0)
+        sc_ = sum(value(V.soc[r,sid,h]) for sid ∈ sids_of[s]; init=0.0)
         (abs(ci)>1e-6 || abs(di)>1e-6 || abs(sc_)>1e-6) && push!(sto, (r, s, Int(h), round(ci,digits=4), round(di,digits=4), round(sc_,digits=4)))
     end
     sto[!, :Unit] .= "GWh"
