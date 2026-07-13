@@ -105,6 +105,16 @@ It reads scenario data from Excel, builds a large LP, solves it
 - The storage constraint block in `genesysmod_equ.jl` is the largest single
   constraint contributor and is the next structural target.
 
+## Benchmarks — always check base results against history
+
+After any base-case (re)run, compare the start-year generation mix AND the
+capacities by fuel against the historic reference values in `Benchmarks/`
+(sourced EIA/CER numbers; add a file when a new geography is modelled) and
+notify the user when a fuel deviates >15%. Small artifacts are fine; hundreds
+of TWh are not (2026-07: coal ran at its ~80% availability limit instead of
+the real US fleet's ~42% CF, skewing ~600 TWh from gas to coal until caught
+by hand — the AvailabilityFactor acts as the annual fleet-CF cap).
+
 ## Reference implementation (GAMS)
 
 This package is a port of the original GAMS model in the separate
