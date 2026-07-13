@@ -32,10 +32,11 @@ const SENS_MODEL_KWARGS = Dict(
 )
 
 # E2P deviation factor (storage-energy band = ratio x [1/f, f]). Since the
-# 2026-07-13 restructure the factor is 1 EVERYWHERE: Par_StorageE2PRatio pins
-# the realized fleet duration exactly (base 1.5h 2025 -> 3.5h 2040; the
-# bess_optimistic / bess_pessimistic subfolders carry their own paths), keeping
-# investment energy consistent with the dispatch model's duration-mix bins.
+# 2026-07-13 restructure a single factor of 1.1 applies everywhere: the
+# Par_StorageE2PRatio path pins the fleet duration (base 1.5h 2025 -> 3.5h
+# 2040; bess_optimistic/pessimistic subfolders carry their own paths) with
+# +-10% wiggle room, keeping investment energy consistent with the dispatch
+# duration-mix bins.
 const SENS_E2P_FACTOR = Dict{String,Float64}()
 const SENS_E2P_FACTOR_DEFAULT = 1.1
 
