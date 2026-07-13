@@ -37,7 +37,7 @@ const SENS_MODEL_KWARGS = Dict(
 # bess_optimistic / bess_pessimistic subfolders carry their own paths), keeping
 # investment energy consistent with the dispatch model's duration-mix bins.
 const SENS_E2P_FACTOR = Dict{String,Float64}()
-const SENS_E2P_FACTOR_DEFAULT = 1.0
+const SENS_E2P_FACTOR_DEFAULT = 1.1
 
 "Scenario label for a sensitivity run."
 sens_label(sensitivity, daystep, hourstep, weather_year, version) =
