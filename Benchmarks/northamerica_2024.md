@@ -47,3 +47,22 @@ inside the tolerance. Assembled 2026-07-13.
 - Wind gen runs ~+15% hot (Opt-class CF 39.5% vs fleet 34%).
 - 2026-07 incident: World coal AF 0.80 let coal run at 78% CF (real ~42%),
   displacing ~570-600 TWh of gas. Fixed via US-pool coal AF rows (0.45).
+
+
+## Scope adjustment — behind-the-meter generation (compare like-for-like!)
+
+The model's FEL demand is BUSBAR (net of BTM), so grid-scale model generation
+must be compared against EIA all-sector values MINUS the BTM part
+(BTM_Generation_Mix_Capacity_v06.xlsx, Calc, 2025, regional rows):
+
+| BTM 2025 | TWh |
+|---|---|
+| gas-fired CHP (chp_gas + process gas + DC gensets) | ~269 |
+| industrial biomass CHP | ~64 |
+| rooftop solar+BESS (beyond commercial) + industrial solar | ~127 |
+| coal CHP | ~16 |
+| all BTM | ~499 |
+
+Scope-adjusted 2025 targets: gas ~1,684 TWh (v6 model: 1,661, -1.4% OK);
+biomass grid-visible well below the 55 all-sector value (model 42 OK);
+solar benchmark ex small-scale ~240 (model 272, +13% OK).
