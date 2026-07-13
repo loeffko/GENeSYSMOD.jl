@@ -31,17 +31,13 @@ const SENS_MODEL_KWARGS = Dict(
                             set_new_res_capacity_region = Dict("ERCOT" => 0.3)),
 )
 
-# E2P deviation factor per sensitivity (storage-energy band = ratio x [1/f, f]).
-# base keeps 2 (the 2015 reference graphs used 2; e2p_6h/8h match it so the
-# RATIO path is the only lever); the cost_low family gets 3 so duration becomes
-# an economic choice; the pessimistic variant squeezes to 1.5. Everything else
-# keeps the v5 wave's 1.5.
-const SENS_E2P_FACTOR = Dict(
-    "base" => 2.0, "bess_e2p_6h" => 2.0, "bess_e2p_8h" => 2.0,
-    "bess_cost_low" => 3.0, "bess_cost_low_6h" => 3.0, "bess_cost_low_8h" => 3.0,
-    "bess_pessimistic" => 1.5,
-)
-const SENS_E2P_FACTOR_DEFAULT = 1.5
+# E2P deviation factor (storage-energy band = ratio x [1/f, f]). Since the
+# 2026-07-13 restructure the factor is 1 EVERYWHERE: Par_StorageE2PRatio pins
+# the realized fleet duration exactly (base 1.5h 2025 -> 3.5h 2040; the
+# bess_optimistic / bess_pessimistic subfolders carry their own paths), keeping
+# investment energy consistent with the dispatch model's duration-mix bins.
+const SENS_E2P_FACTOR = Dict{String,Float64}()
+const SENS_E2P_FACTOR_DEFAULT = 1.0
 
 "Scenario label for a sensitivity run."
 sens_label(sensitivity, daystep, hourstep, weather_year, version) =
