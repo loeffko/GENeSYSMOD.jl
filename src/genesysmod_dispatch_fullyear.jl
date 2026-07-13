@@ -85,6 +85,12 @@ struct DispatchCostConfig
     reservereq ::Dict{String,Tuple{Float64,Float64}}      # region -> (share of hourly demand, GW floor)
     ordc       ::Dict{String,Vector{Tuple{Float64,Float64}}} # region -> [(width share of req, EUR/MWh)]
                                                           # piecewise reserve-shortage penalty
+    fuelyear   ::Dict{String,Vector{Tuple{Int,Float64}}}  # fuel -> [(year, multiplier)]
+                                                          # global year-shape on the fuel price
+                                                          # (e.g. the Henry Hub forward path),
+                                                          # milestone-interpolated; composes
+                                                          # multiplicatively with the regional/
+                                                          # monthly Par_DispatchFuelCostFactor
     storagebins ::Dict{Tuple{String,Float64},Vector{Tuple{Int,Float64}}}
                                                           # (storage, duration h) -> [(year, power
                                                           # share)] milestones: split one aggregate
@@ -96,7 +102,7 @@ struct DispatchCostConfig
                                                           # energy. Year absent/0 = all years.
 end
 const _NEUTRAL_DISPATCH_CONFIG = DispatchCostConfig(Dict(), Dict(), Dict(), Dict(), Dict(),
-                                                    Dict(), Dict(), Dict(), Dict(), Dict(), Dict())
+                                                    Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict())
 
 # month of an hour-of-year (1..8760, non-leap); clamped for safety
 const _MONTH_END_HOUR = cumsum([31,28,31,30,31,30,31,31,30,31,30,31] .* 24)
@@ -182,6 +188,12 @@ function read_dispatch_config(inputdir, dispatch_data_file)
         push!(get!(ordc, string(r.Region), Tuple{Float64,Float64}[]),
               (Float64(r.WidthShare), Float64(r.Price)))
     end
+    fuelyear = Dict{String,Vector{Tuple{Int,Float64}}}()
+    for r ∈ eachrow(sheet("Par_DispatchFuelPriceYear"))
+        push!(get!(fuelyear, string(r.Fuel), Tuple{Int,Float64}[]),
+              (Int(r.Year), Float64(r.Multiplier)))
+    end
+    foreach(v -> sort!(v, by=first), values(fuelyear))
     storagebins = Dict{Tuple{String,Float64},Vector{Tuple{Int,Float64}}}()
     sbsheet = sheet("Par_DispatchStorageBins")
     for r ∈ eachrow(sbsheet)
@@ -197,7 +209,7 @@ function read_dispatch_config(inputdir, dispatch_data_file)
             "$(length(voll)) VoLL rows, $(length(ordc)) ORDC curves, " *
             "$(length(unique(first.(collect(keys(storagebins)))))) binned storages")
     return DispatchCostConfig(techclass, bins, fuelfactor, co2price, co2bench,
-                              minactivity, bidadder, voll, reservereq, ordc, storagebins)
+                              minactivity, bidadder, voll, reservereq, ordc, fuelyear, storagebins)
 end
 
 # class/fuel of a tech ("", "") when unmapped; bins for a tech (nothing = single)
@@ -242,6 +254,14 @@ _dc_bidadder(cfg, r, t, year) =
                            get(cfg.bidadder, ("World", t), Tuple{Int,Float64}[])), year)
 # value of lost load EUR/MWh; region -> World -> legacy DISP_VOLL (10 000)
 _dc_voll(cfg, r) = get(cfg.voll, r, get(cfg.voll, "World", DISP_VOLL * 1000.0))
+# global year-shape multiplier on the fuel price (e.g. HH forward path); 1.0 when absent
+function _dc_fuelyear(cfg, t, year)
+    fuel = _dc_class(cfg, t)[2]
+    isempty(fuel) && return 1.0
+    ms = get(cfg.fuelyear, fuel, Tuple{Int,Float64}[])
+    isempty(ms) && return 1.0
+    return _interp_milestones(ms, year)
+end
 # duration-bin set for storage `s` at `year`: per-duration power shares are
 # milestone-interpolated (Year 0 rows apply to all years), zero-share bins are
 # dropped and the rest renormalised. Returns nothing when `s` has no bin rows.
@@ -439,7 +459,7 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
     co2part(r,d) = max(0.0, co2_t_per_GWh(r,d) - get(dcfg.co2bench, r, 0.0) * 1000.0) * regco2[r] * 1.0e-6
     nts = length(𝓛)
     month_of_ts = Dict(h => _month_of_hour(ceil(Int, i * 8760 / nts)) for (i,h) ∈ enumerate(𝓛))
-    basecost(r,d,h) = vc(r,d) * _dc_fuelmult(dcfg, r, d, month_of_ts[h]) + co2part(r,d)
+    basecost(r,d,h) = vc(r,d) * _dc_fuelmult(dcfg, r, d, month_of_ts[h]) * _dc_fuelyear(dcfg, d, Int(year)) + co2part(r,d)
 
     # per-region value of lost load (MEUR/GWh conversion: EUR/MWh x 1e-3); the
     # nodal price cap in unserved hours (data-driven, Par_DispatchVoLL)
