@@ -1,6 +1,7 @@
 docs/build/
 .CondaPkg/
 .vscode/
+Output/
 test/script.jl
 test/TestData/Results
 debug_scripts
