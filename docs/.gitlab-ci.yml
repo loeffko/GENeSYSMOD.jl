@@ -1,0 +1,27 @@
+# GitLab Pages deployment for the NA model documentation (MkDocs Material).
+# If the docs live in a subfolder of a larger repo, move this file to the repo
+# root and prefix the paths with the subfolder (see the commented variant).
+image: python:3.12-slim
+
+pages:
+  stage: deploy
+  script:
+    - pip install mkdocs-material
+    - mkdocs build --strict --site-dir public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Variant when the docs sit in docs/ of a larger repository:
+# pages:
+#   stage: deploy
+#   script:
+#     - pip install mkdocs-material
+#     - mkdocs build --strict -f docs/mkdocs.yml --site-dir ../public
+#   artifacts:
+#     paths:
+#       - public
+#   rules:
+#     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

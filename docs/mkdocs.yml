@@ -1,0 +1,41 @@
+site_name: GENeSYS-MOD North America
+site_description: >-
+  Documentation of the GENeSYS-MOD.jl North America energy system model —
+  scope, data, methods, scenarios and results.
+site_author: TU Berlin / GENeSYS-MOD team
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: teal
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - scheme: slate
+      primary: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - toc.integrate
+
+markdown_extensions:
+  - admonition
+  - tables
+  - footnotes
+  - pymdownx.superfences
+  - pymdownx.details
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Model & Methods: model.md
+  - Data & Workflow: data.md
+  - "Regions: North America": regions-north-america.md
+  - Scenarios & Sensitivities: scenarios.md
+  - Results & Databases: results.md
