@@ -478,6 +478,11 @@ function read_params(in_data, Sets, Switch, Tags)
     TagTimeIndependentFuel = "Par_TagTimeIndependentFuel" ∈ XLSX.sheetnames(in_data) ?
         create_daa(in_data, "Par_TagTimeIndependentFuel", 𝓕) :
         DenseArray(zeros(length(𝓕)), 𝓕)
+    # Per-technology discount rate (WACC): optional sheet; 0.05 = the historic
+    # flat rate as neutral default, World rows inherited by every region.
+    TechnologyDiscountRate = "Par_TechnologyDiscountRate" ∈ XLSX.sheetnames(in_data) ?
+        create_daa_init(in_data, "Par_TechnologyDiscountRate", 0.05, 𝓡, 𝓣; inherit_base_world=true, base_region=dbr) :
+        DenseArray(fill(0.05, length(𝓡), length(𝓣)), 𝓡, 𝓣)
     TotalTechnologyAnnualActivityUpperLimit = create_daa(in_data, "Par_TotalAnnualMaxActivity", 𝓡, 𝓣, 𝓨)
     TotalTechnologyAnnualActivityLowerLimit = create_daa(in_data, "Par_TotalAnnualMinActivity", 𝓡, 𝓣, 𝓨)
     TotalTechnologyModelPeriodActivityUpperLimit = create_daa_init(in_data, "Par_ModelPeriodActivityMaxLimit", 999999, 𝓡, 𝓣)
@@ -604,7 +609,7 @@ function read_params(in_data, Sets, Switch, Tags)
     OperationalLifeStorage,CapitalCostStorage,ResidualStorageCapacity,TechnologyToStorage,
     TechnologyFromStorage,StorageMaxCapacity,TotalAnnualMaxCapacity, NewCapacityExpansionStop,TotalAnnualMinCapacity,
     GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,GroupTotalAnnualMaxNewCapacity,GroupAnnualMaxTradeCapacity,
-    TagTimeIndependentFuel,
+    TagTimeIndependentFuel,TechnologyDiscountRate,
     AnnualSectoralEmissionLimit,TotalAnnualMaxCapacityInvestment,
     TotalAnnualMinCapacityInvestment,TotalTechnologyAnnualActivityUpperLimit,
     TotalTechnologyAnnualActivityLowerLimit, TotalTechnologyModelPeriodActivityUpperLimit,
@@ -718,6 +723,8 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     GroupTotalAnnualMaxNewCapacity = Params_Full.GroupTotalAnnualMaxNewCapacity[:,:,𝓨]
     GroupAnnualMaxTradeCapacity = Params_Full.GroupAnnualMaxTradeCapacity[:,:,𝓨]
     TagTimeIndependentFuel = Params_Full.TagTimeIndependentFuel
+    # rates average (not sum) across a region merge
+    TechnologyDiscountRate = aggregate_daa(Params_Full.TechnologyDiscountRate, 𝓡, 𝓡_full, Mean(), 𝓣)
     TotalTechnologyAnnualActivityUpperLimit = aggregate_daa(Params_Full.TotalTechnologyAnnualActivityUpperLimit, 𝓡, 𝓡_full, Sum(), 𝓣, 𝓨)
     TotalTechnologyAnnualActivityLowerLimit = aggregate_daa(Params_Full.TotalTechnologyAnnualActivityLowerLimit, 𝓡, 𝓡_full, Sum(), 𝓣, 𝓨)
     TotalTechnologyModelPeriodActivityUpperLimit = aggregate_daa(Params_Full.TotalTechnologyModelPeriodActivityUpperLimit, 𝓡, 𝓡_full, Sum(), 𝓣)
@@ -792,7 +799,7 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     TechnologyFromStorage,StorageMaxCapacity,TotalAnnualMaxCapacity,
     NewCapacityExpansionStop,TotalAnnualMinCapacity,
     GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,GroupTotalAnnualMaxNewCapacity,GroupAnnualMaxTradeCapacity,
-    TagTimeIndependentFuel,
+    TagTimeIndependentFuel,TechnologyDiscountRate,
     AnnualSectoralEmissionLimit,TotalAnnualMaxCapacityInvestment,
     TotalAnnualMinCapacityInvestment,TotalTechnologyAnnualActivityUpperLimit,
     TotalTechnologyAnnualActivityLowerLimit, TotalTechnologyModelPeriodActivityUpperLimit,

@@ -16,11 +16,10 @@ function genesysmod_settings(Sets, Params, socialdiscountrate)
     for r ∈ Sets.Region_full
         DepreciationMethod[r] = 1
         GeneralDiscountRate[r] = Float64(0.05)
-        for t ∈ setdiff(Sets.Technology,Params.Tags.TagTechnologyToSubsets["Households"])
-            TechnologyDiscountRate[r,t] = Float64(0.05)
-        end
-        for t ∈ intersect(Sets.Technology, Params.Tags.TagTechnologyToSubsets["Households"])
-            TechnologyDiscountRate[r,t] = Float64(0.05)
+        # per-technology WACC from Par_TechnologyDiscountRate (0.05 neutral
+        # default + World inheritance handled at data load)
+        for t ∈ Sets.Technology
+            TechnologyDiscountRate[r,t] = Params.TechnologyDiscountRate[r,t]
         end
         SocialDiscountRate[r] = socialdiscountrate
     end

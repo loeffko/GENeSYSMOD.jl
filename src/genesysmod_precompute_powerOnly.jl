@@ -95,6 +95,9 @@ function power_only_precompute!(Params, Sets, Switch)
     SKIP_FUELS = Set(["Gas_Synth"])
     UPSTREAM_TECH = Dict(  # fuel => (tech_name_for_vc_lookup, emission_factor)
         "Gas_Bio" => ("R_Biogas", 0.0),
+        # No Z_Import_Nuclear exists — uranium cost comes from R_Nuclear.
+        # Without this entry the lookup missed and nuclear fuel cost was 0.
+        "Nuclear" => ("R_Nuclear", 0.0),
     )
     # Fuel name → Z_Import_<suffix> name (so the lookup `Z_Import_` * alias(f) hits
     # an actual import tech). Without these the gas/blended-H2 modes would have

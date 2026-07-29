@@ -340,6 +340,10 @@ struct Parameters <: InputClass
     # Per-fuel time-independence tag (1 = treat the fuel's energy balance
     # annually, no per-timeslice balance). Optional input sheet.
     TagTimeIndependentFuel ::JuMP.Containers.DenseAxisArray
+    # Per-technology discount rate (WACC), (Region, Technology). Optional
+    # Par_TechnologyDiscountRate sheet; 0.05 neutral default (the historic
+    # flat rate), World rows inherited by every region.
+    TechnologyDiscountRate ::JuMP.Containers.DenseAxisArray
 
     AnnualSectoralEmissionLimit ::JuMP.Containers.DenseAxisArray
 
