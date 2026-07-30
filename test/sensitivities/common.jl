@@ -5,8 +5,8 @@
 #         repo's NA_inputs/build_sensitivity_inputs.py) +
 #         Timeseries_NorthAmerica_<weatheryear>.xlsx; the allFuels workbook is
 #         demand-independent and shared by all sensitivities.
-using Pkg
-Pkg.develop(path="C:/Users/testbed/Documents/GENeSYSMOD.jl_SE")
+# run with julia --project from the repo - the project is already active
+# (Pkg.develop on the active project errors under Julia 1.12)
 using GENeSYSMOD
 using Gurobi
 using Ipopt
@@ -29,6 +29,10 @@ const SENS_MODEL_KWARGS = Dict(
     # demand shift is assumed to re-route gas builds, not accelerate RES.
     "dc_high_limitless" => (set_investment_limit = 3.0, set_new_res_capacity = 0.2,
                             set_new_res_capacity_region = Dict("ERCOT" => 0.3)),
+    # DC cross-sensitivities: every dch_* carries dc_high's RES pacing
+    ["dch_$(sfx)" => (set_new_res_capacity = 0.2,) for sfx ∈
+        ["eco", "gridhigh", "gridhigh_nf", "gridlow", "bessopt",
+         "eco_bessopt", "eco_gridhigh", "eco_bessopt_gridhigh"]]...,
 )
 
 # E2P deviation factor (storage-energy band = ratio x [1/f, f]). Since the
