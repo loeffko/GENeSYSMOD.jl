@@ -419,6 +419,11 @@ function read_params(in_data, Sets, Switch, Tags)
     GrowthRateTradeCapacity = create_daa(in_data, "Par_GrowthRateTradeCapacity", 𝓡, 𝓡, 𝓕, 𝓨)
     TradeCapacity = create_daa(in_data,"Par_TradeCapacity", 𝓡, 𝓡, 𝓕, 𝓨)
     CommissionedTradeCapacity = create_daa(in_data,"Par_CommissionedTradeCapacity", 𝓡, 𝓡, 𝓕, 𝓨)
+    # Bootstrap for virgin corridors in the growth-rate trade constraints;
+    # optional sheet, neutral default 0 (no first-build allowance).
+    InitialMaxNewTradeCapacity = "Par_InitialMaxNewTradeCapacity" ∈ XLSX.sheetnames(in_data) ?
+        create_daa_init(in_data, "Par_InitialMaxNewTradeCapacity", 0, 𝓡, 𝓡, 𝓕) :
+        DenseArray(zeros(length(𝓡), length(𝓡), length(𝓕)), 𝓡, 𝓡, 𝓕)
     # Absolute interconnector bounds (optional sheets): Max default 999999, Min default 0.
     AnnualMaxTradeCapacity = "Par_AnnualMaxTradeCapacity" ∈ XLSX.sheetnames(in_data) ?
         create_daa_init(in_data, "Par_AnnualMaxTradeCapacity", 999999, 𝓡, 𝓡, 𝓕, 𝓨) :
@@ -609,7 +614,7 @@ function read_params(in_data, Sets, Switch, Tags)
     OperationalLifeStorage,CapitalCostStorage,ResidualStorageCapacity,TechnologyToStorage,
     TechnologyFromStorage,StorageMaxCapacity,TotalAnnualMaxCapacity, NewCapacityExpansionStop,TotalAnnualMinCapacity,
     GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,GroupTotalAnnualMaxNewCapacity,GroupAnnualMaxTradeCapacity,
-    TagTimeIndependentFuel,TechnologyDiscountRate,
+    TagTimeIndependentFuel,TechnologyDiscountRate,InitialMaxNewTradeCapacity,
     AnnualSectoralEmissionLimit,TotalAnnualMaxCapacityInvestment,
     TotalAnnualMinCapacityInvestment,TotalTechnologyAnnualActivityUpperLimit,
     TotalTechnologyAnnualActivityLowerLimit, TotalTechnologyModelPeriodActivityUpperLimit,
@@ -761,6 +766,7 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     TradeRouteInstalledCapacity = Params_Full.TradeRouteInstalledCapacity[𝓡,𝓡,:,𝓨]
 
     CommissionedTradeCapacity = Params_Full.CommissionedTradeCapacity[𝓡,𝓡,:,𝓨]
+    InitialMaxNewTradeCapacity = Params_Full.InitialMaxNewTradeCapacity[𝓡,𝓡,:]
 
     SelfSufficiency = Params_Full.SelfSufficiency[𝓡,:,𝓨]
     ProductionGrowthLimit = Params_Full.ProductionGrowthLimit
@@ -799,7 +805,7 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     TechnologyFromStorage,StorageMaxCapacity,TotalAnnualMaxCapacity,
     NewCapacityExpansionStop,TotalAnnualMinCapacity,
     GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,GroupTotalAnnualMaxNewCapacity,GroupAnnualMaxTradeCapacity,
-    TagTimeIndependentFuel,TechnologyDiscountRate,
+    TagTimeIndependentFuel,TechnologyDiscountRate,InitialMaxNewTradeCapacity,
     AnnualSectoralEmissionLimit,TotalAnnualMaxCapacityInvestment,
     TotalAnnualMinCapacityInvestment,TotalTechnologyAnnualActivityUpperLimit,
     TotalTechnologyAnnualActivityLowerLimit, TotalTechnologyModelPeriodActivityUpperLimit,

@@ -500,7 +500,10 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
           base_name="TrC2b_TotalTradeCapacity|$(𝓨[i])|$(f)|$(r)|$(rr)")
         end
         if f == "Power" && i > 1 && Params.GrowthRateTradeCapacity[r,rr,f,𝓨[i]] > 0
-          @constraint(model, (Params.GrowthRateTradeCapacity[r,rr,f,𝓨[i]]*YearlyDifferenceMultiplier(𝓨[i],Sets))*Vars.TotalTradeCapacity[𝓨[i-1],f,r,rr] >= Vars.NewTradeCapacity[𝓨[i],f,r,rr],
+          # Virgin-corridor bootstrap: with zero base capacity the growth term
+          # is 0 forever; Par_InitialMaxNewTradeCapacity allows a first build
+          # (data-driven; 0 default keeps the corridor closed).
+          @constraint(model, (Params.TradeCapacity[r,rr,f,𝓨[i]] == 0 ? Params.InitialMaxNewTradeCapacity[r,rr,f] : 0.0)+(Params.GrowthRateTradeCapacity[r,rr,f,𝓨[i]]*YearlyDifferenceMultiplier(𝓨[i],Sets))*Vars.TotalTradeCapacity[𝓨[i-1],f,r,rr] >= Vars.NewTradeCapacity[𝓨[i],f,r,rr],
           base_name="TrC3_NewTradeCapacityLimitPowerLines|$(𝓨[i])|Power|$(r)|$(rr)")
         end
         # Absolute interconnector bounds on total trade capacity (e.g. the IC Low/High
@@ -522,11 +525,11 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
     #=
     if i > 1
       for (r,rr) ∈ get(pairs_by_fuel, "Gas_Natural", Tuple{String,String}[])
-        @constraint(model, (Params.TradeCapacity[r,rr,"Gas_Natural",𝓨[i]] == 0 ? 100 : 0)+(Params.GrowthRateTradeCapacity[r,rr,"Gas_Natural",𝓨[i]]*YearlyDifferenceMultiplier(𝓨[i],Sets))*Vars.TotalTradeCapacity[𝓨[i-1],"Gas_Natural",r,rr] >= Vars.NewTradeCapacity[𝓨[i],"Gas_Natural",r,rr],
+        @constraint(model, (Params.TradeCapacity[r,rr,"Gas_Natural",𝓨[i]] == 0 ? Params.InitialMaxNewTradeCapacity[r,rr,"Gas_Natural"] : 0.0)+(Params.GrowthRateTradeCapacity[r,rr,"Gas_Natural",𝓨[i]]*YearlyDifferenceMultiplier(𝓨[i],Sets))*Vars.TotalTradeCapacity[𝓨[i-1],"Gas_Natural",r,rr] >= Vars.NewTradeCapacity[𝓨[i],"Gas_Natural",r,rr],
         base_name="TrC4a_NewTradeCapacityLimitNatGas|$(𝓨[i])|Gas_Natural|$(r)|$(rr)")
       end
       for (r,rr) ∈ get(pairs_by_fuel, "H2", Tuple{String,String}[])
-        @constraint(model, (Params.TradeCapacity[r,rr,"H2",𝓨[i]] == 0 ? 50 : 0)+(Params.GrowthRateTradeCapacity[r,rr,"H2",𝓨[i]]*YearlyDifferenceMultiplier(𝓨[i],Sets))*Vars.TotalTradeCapacity[𝓨[i-1],"H2",r,rr] >= Vars.NewTradeCapacity[𝓨[i],"H2",r,rr],
+        @constraint(model, (Params.TradeCapacity[r,rr,"H2",𝓨[i]] == 0 ? Params.InitialMaxNewTradeCapacity[r,rr,"H2"] : 0.0)+(Params.GrowthRateTradeCapacity[r,rr,"H2",𝓨[i]]*YearlyDifferenceMultiplier(𝓨[i],Sets))*Vars.TotalTradeCapacity[𝓨[i-1],"H2",r,rr] >= Vars.NewTradeCapacity[𝓨[i],"H2",r,rr],
         base_name="TrC5a_NewTradeCapacityLimitH2|$(𝓨[i])|H2|$(r)|$(rr)")
       end
     else

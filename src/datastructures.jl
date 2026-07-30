@@ -340,10 +340,17 @@ struct Parameters <: InputClass
     # Per-fuel time-independence tag (1 = treat the fuel's energy balance
     # annually, no per-timeslice balance). Optional input sheet.
     TagTimeIndependentFuel ::JuMP.Containers.DenseAxisArray
+    # NOTE: field order must match the positional constructor calls in
+    # genesysmod_dataload.jl (TechnologyDiscountRate, then
+    # InitialMaxNewTradeCapacity, both directly after TagTimeIndependentFuel).
     # Per-technology discount rate (WACC), (Region, Technology). Optional
     # Par_TechnologyDiscountRate sheet; 0.05 neutral default (the historic
     # flat rate), World rows inherited by every region.
     TechnologyDiscountRate ::JuMP.Containers.DenseAxisArray
+    # Max first-year new-build on a virgin trade corridor (Region, Region2,
+    # Fuel) — the bootstrap for the growth-rate trade constraints (replaces
+    # the old hardcoded 100/50 constants). Optional sheet; 0 = no bootstrap.
+    InitialMaxNewTradeCapacity ::JuMP.Containers.DenseAxisArray
 
     AnnualSectoralEmissionLimit ::JuMP.Containers.DenseAxisArray
 
