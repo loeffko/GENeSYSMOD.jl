@@ -189,7 +189,8 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
     switch_power_only_mode=0, allfuels_data_file="",
     switch_endogenous_specifieddemandforecasting=0, switch_results_db=0, switch_errorcheck=2,
     extr_str_results = "inv_run", extr_str_dispatch="dispatch_run",switch_iis=1, solver_log=true, solver_attr=Dict(),
-    switch_test_data_load=0, switch_dump_input_data=0,
+    switch_test_data_load=0, switch_dump_input_data=1,
+    switch_snapshot_duals=0,
     set_investment_limit=1.9, set_new_res_capacity=0.1,
     set_new_res_capacity_region=Dict{String,Float64}())
 
@@ -405,6 +406,13 @@ function genesysmod(;elmod_daystep, elmod_hourstep, solver, DNLPsolver, year=201
         end
         genesysmod_getspecifiedduals(model,switch,switch.extr_str_results, considered_duals)
         println("  Results: specified_duals : ", Dates.now()-_tr)
+        # GDX-style full constraint snapshot (levels + marginals), opt-in
+        if switch_snapshot_duals == 1 && switch.switch_results_db == 1
+            _tr = Dates.now()
+            _db_attempt(() -> write_snapshot_duals_db(model, switch, switch.extr_str_results),
+                "snapshot duals (scenario '$(switch.extr_str_results)')")
+            println("  Results: snapshot_duals : ", Dates.now()-_tr)
+        end
     else
         println("Termination status:", termination_status(model), ".")
     end

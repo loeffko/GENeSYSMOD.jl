@@ -249,9 +249,13 @@ function db_purge_scenario(Switch, extr_str)
     path = _results_db_path(Switch)
     isfile(path) || haskey(_DB_HANDLES, abspath(path)) || return
     con = _db_connect(path)
+    # input_* is excluded: the input dump runs at BUILD time under the same
+    # scenario label and handles its own per-table purge — sweeping it here
+    # would wipe the just-written input snapshot before the results land.
     tables = DataFrame(DBInterface.execute(con,
         "SELECT DISTINCT table_name FROM information_schema.columns " *
-        "WHERE column_name = 'Scenario' AND table_schema = 'main'"))
+        "WHERE column_name = 'Scenario' AND table_schema = 'main' " *
+        "AND table_name NOT LIKE 'input\\_%' ESCAPE '\\'"))
     for t in tables.table_name
         DBInterface.execute(con,
             "DELETE FROM $(_quote_ident(t)) WHERE Scenario = ?", [String(extr_str)])
@@ -376,10 +380,16 @@ function dump_inputs_db(case, switch::Switch)
     Sets   = case["Sets"]
     dbpath = _inputdata_db_path(switch)
     con = _db_connect(dbpath)
+    scenario = String(switch.extr_str_results)
+    # GDX-style semantics: input_* tables are scenario-keyed like the outputs
+    # (purge-and-append per label), so every run keeps its own input snapshot.
+    # One-time migration: legacy tables without a Scenario column are dropped.
     for t in DataFrame(DBInterface.execute(con,
             "SELECT table_name FROM information_schema.tables " *
             "WHERE table_schema = 'main' AND table_name LIKE 'input\\_%' ESCAPE '\\'")).table_name
-        DBInterface.execute(con, "DROP TABLE IF EXISTS $(_quote_ident(t))")
+        has_scen = !isempty(DataFrame(DBInterface.execute(con,
+            "SELECT 1 FROM information_schema.columns WHERE table_name = ? AND column_name = 'Scenario'", [string(t)])))
+        has_scen || DBInterface.execute(con, "DROP TABLE IF EXISTS $(_quote_ident(t))")
     end
     ntables = 0
     for field in fieldnames(typeof(Params))
@@ -388,10 +398,8 @@ function dump_inputs_db(case, switch::Switch)
         try
             df = DataFrame(JuMP.Containers.rowtable(identity, daa; header=_rowtable_header(daa, field, Sets)))
             isempty(df) && continue
-            reg = "df_in"
-            DuckDB.register_data_frame(con, df, reg)
-            DBInterface.execute(con, "CREATE TABLE $(_quote_ident("input_" * string(field))) AS SELECT * FROM $(_quote_ident(reg))")
-            DuckDB.unregister_data_frame(con, reg)
+            insertcols!(df, 1, :Scenario => scenario)
+            _db_write_scenario!(con, "input_" * string(field), df, scenario)
             ntables += 1
         catch e
             @warn "Could not dump parameter $(field)" exception=e
@@ -414,10 +422,8 @@ function dump_inputs_db(case, switch::Switch)
                     continue
                 end
                 isempty(df) && continue
-                reg = "df_tag"
-                DuckDB.register_data_frame(con, df, reg)
-                DBInterface.execute(con, "CREATE TABLE $(_quote_ident("input_" * string(tf))) AS SELECT * FROM $(_quote_ident(reg))")
-                DuckDB.unregister_data_frame(con, reg)
+                insertcols!(df, 1, :Scenario => scenario)
+                _db_write_scenario!(con, "input_" * string(tf), df, scenario)
                 ntables += 1
             catch e
                 @warn "Could not dump tag $(tf)" exception=e
@@ -428,10 +434,8 @@ function dump_inputs_db(case, switch::Switch)
         s = getfield(Sets, field)
         s isa AbstractVector || continue
         try
-            reg = "df_set"
-            DuckDB.register_data_frame(con, DataFrame(value = collect(s)), reg)
-            DBInterface.execute(con, "CREATE TABLE $(_quote_ident("input_SET_" * string(field))) AS SELECT * FROM $(_quote_ident(reg))")
-            DuckDB.unregister_data_frame(con, reg)
+            _db_write_scenario!(con, "input_SET_" * string(field),
+                DataFrame(Scenario = scenario, value = collect(s)), scenario)
             ntables += 1
         catch e
             @warn "Could not dump set $(field)" exception=e
@@ -439,4 +443,32 @@ function dump_inputs_db(case, switch::Switch)
     end
     println("Input data dumped to $(dbpath) ($(ntables) tables).")
     return dbpath
+end
+
+"""
+GDX-style full constraint snapshot: every named constraint's activity level
+and marginal (dual) into one scenario-keyed table `snapshot_duals`. Together
+with the input dump (sets + parameters, on by default) and the raw variable
+writers this gives GAMS `gdx=`-equivalent run reconstruction. Opt-in
+(`switch_snapshot_duals = 1`): the table is large (one row per constraint).
+"""
+function write_snapshot_duals_db(model, Switch, extr_str)
+    JuMP.has_duals(model) || (@warn "snapshot_duals: model has no duals"; return)
+    con = _db_connect(_results_db_path(Switch))
+    cnames = String[]; lvls = Float64[]; margs = Float64[]
+    for (F, S) in JuMP.list_of_constraint_types(model)
+        F === JuMP.VariableRef && continue   # variable bounds: levels live in the raw variable tables
+        for cref in JuMP.all_constraints(model, F, S)
+            n = JuMP.name(cref)
+            isempty(n) && continue
+            push!(cnames, n)
+            push!(lvls, JuMP.value(cref))
+            push!(margs, JuMP.dual(cref))
+        end
+    end
+    df = DataFrame(Scenario = String(extr_str), Constraint = cnames,
+                   Level = lvls, Marginal = margs)
+    _db_write_scenario!(con, "snapshot_duals", df, String(extr_str))
+    println("  Results: snapshot_duals : $(length(cnames)) constraints")
+    return
 end
