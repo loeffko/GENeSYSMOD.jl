@@ -181,6 +181,18 @@ function genesysmod_bounds(model,Sets,Params, Vars,Settings,Switch,Maps)
                     JuMP.unfix(Vars.NewCapacity[Switch.StartYear,t,r])
                 end
             end
+            # Data-driven start-year build allowance: technologies tagged into the
+            # optional "BaseYearBuildable" subset may add capacity in the start
+            # year. Needed where base-year production floors exceed what the
+            # residual fleet can deliver against a seasonal demand profile (heat
+            # supply): with new builds fixed to 0 those floors are infeasible at
+            # fine time resolution. Absent subset = nothing extra unfixed.
+            for t ∈ intersect(Sets.Technology,
+                              get(Params.Tags.TagTechnologyToSubsets, "BaseYearBuildable", String[]))
+                if JuMP.is_fixed(Vars.NewCapacity[Switch.StartYear,t,r])
+                    JuMP.unfix(Vars.NewCapacity[Switch.StartYear,t,r])
+                end
+            end
         end
 
         #= if "CHP" ∈ Sets.Sector
@@ -351,8 +363,12 @@ function genesysmod_bounds(model,Sets,Params, Vars,Settings,Switch,Maps)
     # (no reset -> deliberately absent). Window hours are converted to timeslice
     # positions via elmod_hourstep (literal hours at hourly resolution;
     # proportional otherwise, so LDES always cycles 3x longer than BESS).
-    storage_reset_h = Dict("S_Battery_Li-Ion" => 24, "S_Heat_HB_Tank_Small" => 24,
-        "S_Heat_HLI_Tank_Large" => 24, "S_CAES" => 72, "S_Battery_Redox" => 72)
+    # NOTE 2026-08-02: the heat-tank keys previously read "S_Heat_HB_Tank_Small" /
+    # "S_Heat_HLI_Tank_Large", which match no member of Sets.Storage (the real
+    # names carry no "Heat_" infix), so heat tanks silently never reset and could
+    # act as seasonal storage. Corrected to the actual set names.
+    storage_reset_h = Dict("S_Battery_Li-Ion" => 24, "S_HB_Tank_Small" => 24,
+        "S_HLI_Tank_Large" => 24, "S_CAES" => 72, "S_Battery_Redox" => 72)
 
     for r ∈ Sets.Region_full for i ∈ 1:length(Sets.Timeslice) for y ∈ Sets.Year
         if Switch.switch_dispatch isa NoDispatch

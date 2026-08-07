@@ -149,6 +149,7 @@ module ScenarioDataEurope
         Params.CurtailmentCostFactor[:,:,:] .= 45
 
         for r ∈ Sets.Region_full, y ∈ Sets.Year
+            Switch.switch_districtheat == 0 && continue
             if Params.DistrictHeatDemand[r,y] != 0
                 @constraint(model, sum(Vars.ProductionByTechnologyAnnual[y,t,"Heat_District",r] for t ∈ [t_ for (t_,f_) ∈ Maps.Set_Tech_FuelOut if f_ == "Heat_District"]) >= Params.DistrictHeatDemand[r,y]*Params.InputActivityRatio[r,"X_Convert_HD","Heat_District",1,y]*0.95,
                 base_name="DistrictHeatProductionAnnualLowerLimit|$(r)|Heat_District|$(y)")
