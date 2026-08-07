@@ -890,6 +890,10 @@ struct Switch <: InputClass
     switch_endogenous_specifieddemandforecasting ::Int8
     switch_results_db ::Int8
     switch_errorcheck ::Int8
+    # District-heat scenario constraints (EU): annual production band around
+    # DistrictHeatDemand and the per-sector conversion split. 1 = active
+    # (default), 0 = skipped (diagnostics / datasets without a DH storyline).
+    switch_districtheat ::Int8
 end
 
 """
