@@ -93,6 +93,16 @@ It reads scenario data from Excel, builds a large LP, solves it
 - Code uses Unicode set aliases: `𝓨` year, `𝓡` region, `𝓣` technology,
   `𝓕` fuel, `𝓜` mode, `𝓛` timeslice, `𝓢` storage, `𝓔` emission. 2-space indent
   inside functions.
+- **Optional data-driven sheets** (absent sheet = neutral default, no code change
+  needed): `Par_TagFuelToTimeseries` (Fuel, Profile) binds a demand fuel to a
+  `TS_<Profile>` sheet - tagged fuels join the profile-override loop in
+  `load_reduced_timeserie!` (untagged non-Power/Heat/Transport demand fuels get
+  the LOAD shape); `Par_FuelUseRateLimit` x `Par_FuelUseRateLimitMonth` (GW-th
+  cap on fuel use per timeslice, CA6); `Par_InitialMaxNewTradeCapacity` (virgin
+  corridor bootstrap). Any fuel with an `Infeasibility_<Fuel>` technology in the
+  data gets the slack automatically. Transformation-subset techs cannot build in
+  the start year unless tagged `BaseYearBuildable` - size conversion dummies'
+  residual capacity with headroom.
 - `switch_endogenous_specifieddemandforecasting` (default 1) forecasts later-year
   demand from the base year via `SpecifiedDemandDevelopment`; set 0 to use the
   per-year values in `Par_SpecifiedAnnualDemand` directly.

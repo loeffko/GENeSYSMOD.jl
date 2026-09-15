@@ -1,6 +1,12 @@
 # Natural gas infrastructure in the North America model - design proposal
 
-Status: PROPOSAL for review (2026-09-12). Nothing implemented yet except research.
+> **Status 2026-09-15:** implemented as data scenario `NorthAmerica_gas` (generator
+> `NA_inputs/build_gas_scenario.py`, v6-freeze basis) with data-gated code (jl_SE
+> `1023273`, `76e15f8`, `c0e8f32`). User decisions: Z_Import_Gas physical-only,
+> deliverability cap on, AEO sectoral non-power trajectory, v6 basis, corridor rules
+> as proposed. 1924 probe optimal; 49-hour run `fel2026_gas_49_2015_v6` in progress.
+
+Original status: PROPOSAL for review (2026-09-12); see the implementation status above.
 All research items resolved (last gaps closed 2026-09-12); remaining proxies are flagged inline.
 Data basis: EIA (state-to-state capacity Jan-2026, ARR 2024, consumption 2024,
 liquefaction Q2-2026, pipeline projects Aug-2026, AEO2026), CER Canada Energy
