@@ -415,15 +415,69 @@ function timeseries_reduction!(Params, Sets, Switch)
         set_optimizer(model_scaling1, Switch.DNLPsolver)
         optimize!(model_scaling1)
 
+        # Per-series scaling parameters from the NLP. Every series' residual
+        # g(e) = Avg*N - sum_l scaled_l(e) is monotone in its exponent e (s_l in
+        # [0,1]), so the NLP optimum is unique: the root of g on [0,10] or the
+        # nearer bound. If the DNLP solver does not converge (seen at nthhour 49:
+        # Ipopt "Search Direction is becoming Too Small" / iteration limit after an
+        # extra benign demand series was added) fall back to that exact root by
+        # bisection instead of using a stalled iterate. Converged runs are unchanged.
+        _scaling_status = JuMP.termination_status(model_scaling1)
+        _scaling_ok = _scaling_status in (MOI.OPTIMAL, MOI.LOCALLY_SOLVED, MOI.ALMOST_OPTIMAL, MOI.ALMOST_LOCALLY_SOLVED)
+        _in_nlp(cde, r) = AverageCapacityFactor[cde][1,r] != 0 && (SmoothedCountryDataMax[cde][1,r] - SmoothedCountryDataMin[cde][1,r]) != 0
+        _resid(cde, r, e) = AverageCapacityFactor[cde][1,r] * N -
+            sum(max(0, (((SmoothedCountryData[cde][l,r]-SmoothedCountryDataMin[cde][1,r])/(SmoothedCountryDataMax[cde][1,r]-SmoothedCountryDataMin[cde][1,r]))^e)*
+                (CountryDataMax[cde][1,r] - CountryDataMin[cde][1,r]) + CountryDataMin[cde][1,r])
+                for l ∈ Sets.Timeslice if (SmoothedCountryData[cde][l,r]-SmoothedCountryDataMin[cde][1,r]) != 0; init=0.0) -
+            sum(max(0,CountryDataMin[cde][1,r]) for l ∈ Sets.Timeslice if (SmoothedCountryData[cde][l,r]-SmoothedCountryDataMin[cde][1,r]) == 0; init=0.0)
+        function _bisect_exponent(cde, r)
+            lo, hi = 0.0, 10.0
+            glo, ghi = _resid(cde, r, lo), _resid(cde, r, hi)
+            glo * ghi > 0 && return abs(glo) <= abs(ghi) ? lo : hi
+            for _ in 1:100
+                mid = (lo + hi) / 2
+                gm = _resid(cde, r, mid)
+                if sign(gm) == sign(glo); lo, glo = mid, gm else hi, ghi = mid, gm end
+                hi - lo < 1e-14 && break
+            end
+            return (lo + hi) / 2
+        end
+        scaling_exponent_val = Dict{Any,Float64}()
+        scaling_multiplicator_val = Dict{Any,Float64}()
+        scaling_addition_val = Dict{Any,Float64}()
+        if _scaling_ok
+            println("Timeseries scaling NLP: ", _scaling_status, " (objective ", round(JuMP.objective_value(model_scaling1), digits=6), ")")
+            for r ∈ Sets.Region_full, cde ∈ Country_Data_Entries
+                scaling_exponent_val[(r,cde)] = JuMP.value(model_scaling1[:scaling_exponent][r,cde])
+                scaling_multiplicator_val[(r,cde)] = JuMP.value(model_scaling1[:scaling_multiplicator][r,cde])
+                scaling_addition_val[(r,cde)] = JuMP.value(model_scaling1[:scaling_addition][r,cde])
+            end
+        else
+            @warn "Timeseries scaling NLP ended with $(_scaling_status); using the exact per-series bisection solution instead (same optimum)."
+            for r ∈ Sets.Region_full, cde ∈ Country_Data_Entries
+                if _in_nlp(cde, r)
+                    scaling_exponent_val[(r,cde)] = _bisect_exponent(cde, r)
+                    scaling_multiplicator_val[(r,cde)] = CountryDataMax[cde][1,r] - CountryDataMin[cde][1,r]
+                    scaling_addition_val[(r,cde)] = CountryDataMin[cde][1,r]
+                else
+                    scaling_exponent_val[(r,cde)] = 1.0
+                    scaling_multiplicator_val[(r,cde)] = 0.0
+                    scaling_addition_val[(r,cde)] = 0.0
+                end
+            end
+            _resid_total = sum(_resid(cde, r, scaling_exponent_val[(r,cde)])^2 for r ∈ Sets.Region_full for cde ∈ Country_Data_Entries if _in_nlp(cde, r); init=0.0)
+            println("Timeseries scaling bisection: residual objective ", round(_resid_total, digits=6))
+        end
+
         for cde ∈ Country_Data_Entries for r ∈ Sets.Region_full
             if SmoothedCountryDataMax[cde][1,r] - SmoothedCountryDataMin[cde][1,r] != 0
                 for l ∈ Sets.Timeslice
                 ScaledCountryData[cde][l,r] = max(0, (
                     ((((SmoothedCountryData[cde][l,r] - SmoothedCountryDataMin[cde][1,r]) / (SmoothedCountryDataMax[cde][1,r] - SmoothedCountryDataMin[cde][1,r])
-                    )^max(0,JuMP.value(model_scaling1[:scaling_exponent][r,cde]))
+                    )^max(0,scaling_exponent_val[(r,cde)])
                     )
-                    ) * JuMP.value(model_scaling1[:scaling_multiplicator][r,cde])
-                    ) + JuMP.value(model_scaling1[:scaling_addition][r,cde]))
+                    ) * scaling_multiplicator_val[(r,cde)]
+                    ) + scaling_addition_val[(r,cde)])
                 end
             else
                 # Flat profile (max == min, e.g. the dummy =1 demand timeseries): the
