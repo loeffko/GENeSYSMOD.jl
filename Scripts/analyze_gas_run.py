@@ -36,6 +36,25 @@ cap = {(r[0], r[1], r[2]): r[3] for r in q("SELECT Region, Region2, Year, ROUND(
 for a, b, v in fl:
     print(f'  {a:>11s} -> {b:<11s} flow {v:6.0f}   cap {cap.get((a,b,2025),0):6.0f} -> {cap.get((a,b,2040),0):6.0f}')
 
+# --- corridor flows 2025 vs EIA 2024 inter-regional movements (state-level ISO mapping; Bcf/d)
+import os, csv
+GR = 'C:/Users/testbed/Documents/GENeSYS-MOD.data_francesca/NA_inputs/gas_research'
+try:
+    eia = {(r['RF'], r['RT']): float(r['bcfd']) for r in csv.DictReader(open(os.path.join(GR, 'eia_interregional_flows_2024.csv')))}
+    mod = {(r[0], r[1]): r[2] / 399.4 for r in q("SELECT Region, Region2, SUM(Value) FROM output_trade WHERE Scenario=? AND Fuel='Gas_Natural' AND Year=2025 AND Type='Export' GROUP BY 1,2", [S])}
+    print('\n--- corridor flows 2025 model vs EIA 2024 (Bcf/d, gross per direction; EIA state->ISO mapping is coarse for TX/NM/AR/IL/KY/MS/MO)')
+    print(f'  {"corridor":24s} {"model":>7s} {"EIA":>7s}')
+    for k in sorted(set(eia) | {k for k, v in mod.items() if v > 0.05}, key=lambda k: -eia.get(k, 0)):
+        print(f'  {k[0]:>11s} -> {k[1]:<10s} {mod.get(k, 0):7.2f} {eia.get(k, 0):7.2f}')
+    for grp, pairs in {'ERCOT+SPP -> MISO': [('ERCOT','MISO'),('SPP','MISO')], 'MISO+PJM -> SERC': [('MISO','SERC'),('PJM','SERC')], 'WECC -> California': [('WECC','California')], 'PJM -> NewYork': [('PJM','NewYork')]}.items():
+        print(f'  {grp:24s} {sum(mod.get(k,0) for k in pairs):7.2f} {sum(eia.get(k,0) for k in pairs):7.2f}')
+    bor = {(r['region'], r['type']): float(r['bcfd']) for r in csv.DictReader(open(os.path.join(GR, 'eia_border_flows_2024.csv')))}
+    print('  Canada border 2025 model (import from / export to Canada) vs EIA 2024:')
+    for reg in ('WECC', 'MISO', 'SPP', 'NewYork', 'NewEngland'):
+        print(f'    {reg:11s} imp {mod.get(("Canada", reg), 0):5.2f} / {bor.get((reg, "import_Canada"), 0):5.2f}   exp {mod.get((reg, "Canada"), 0):5.2f} / {bor.get((reg, "export_Canada"), 0):5.2f}')
+except Exception as e:
+    print('EIA corridor benchmark skipped:', str(e)[:200])
+
 # --- storage
 st = q("SELECT Region, Year, ROUND(SUM(Value),1) FROM output_capacity WHERE Scenario=? AND Technology='D_Gas_Methane' AND Type='TotalCapacity' AND Year IN (2025,2040) GROUP BY 1,2 ORDER BY 1,2", [S])
 print('\n--- D_Gas_Methane capacity (GW-th) 2025/2040:', {(r[0], r[1]): r[2] for r in st})
