@@ -34,7 +34,7 @@ function create_df_hourly(in_data, tab_name)
     return long_df
 end
 
-# Optional Par_TagFuelToTimeseries sheet (Fuel, Timeseries[, Value]) in the regular
+# Optional Par_TagFuelToTimeseries sheet (Fuel, Profile[, Value]) in the regular
 # input workbook -> Dict fuel => TS suffix (e.g. Gas_Natural => GAS_NONPOWER).
 # Absent sheet = empty Dict. Lets a dataset bind a profile to a new demand fuel
 # without touching the keys_mapping dict in load_reduced_timeserie!.
@@ -46,7 +46,7 @@ function _read_fuel_timeseries_tags(Switch)
         "Par_TagFuelToTimeseries" in XLSX.sheetnames(xf) || return
         df = DataFrame(XLSX.gettable(xf["Par_TagFuelToTimeseries"]))
         for row in eachrow(df)
-            f = row[:Fuel]; ts = row[:Timeseries]
+            f = row[:Fuel]; ts = row[:Profile]   # column is named Profile: a "Timeseries" header would be filtered by the data converter
             (ismissing(f) || ismissing(ts)) && continue
             out[String(f)] = String(ts)
         end
