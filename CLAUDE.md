@@ -103,6 +103,12 @@ It reads scenario data from Excel, builds a large LP, solves it
   data gets the slack automatically. Transformation-subset techs cannot build in
   the start year unless tagged `BaseYearBuildable` - size conversion dummies'
   residual capacity with headroom.
+- **Timeseries scaling NLP** (`timeseries_reduction!`): Ipopt solves one joint
+  DNLP for all series' scaling exponents. Each series' residual is monotone in
+  its exponent, so the optimum is unique; if Ipopt does not converge (seen at
+  nthhour 49 once a benign extra demand series was added) the code falls back
+  to an exact per-series bisection and prints a status line. Converged runs
+  are untouched.
 - `switch_endogenous_specifieddemandforecasting` (default 1) forecasts later-year
   demand from the base year via `SpecifiedDemandDevelopment`; set 0 to use the
   per-year values in `Par_SpecifiedAnnualDemand` directly.

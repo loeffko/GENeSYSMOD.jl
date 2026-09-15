@@ -61,13 +61,23 @@ print('\n--- D_Gas_Methane capacity (GW-th) 2025/2040:', {(r[0], r[1]): r[2] for
 cyc = q("SELECT Region, ROUND(SUM(Value),0) FROM output_production WHERE Scenario=? AND Technology='D_Gas_Methane' AND Type='Production' AND Year=2040 GROUP BY 1", [S])
 print('storage discharge 2040 (PJ):', dict(cyc))
 
-# --- regional gas prices (EB2 duals): annual demand-weighted average, EUR/MWh
+# --- regional gas prices (EB2 duals): the dual of the timeslice balance is the marginal
+# value of 1 PJ in that slice in discounted money; undiscount with the run's social
+# discount rate (output_switches) to get EUR/GJ (= M EUR/PJ) comparable to Henry Hub.
 try:
-    cols = [r[0] for r in q("SELECT column_name FROM information_schema.columns WHERE table_name='duals_EB2_EnergyBalanceEachTS'")]
-    print('\nduals_EB2 columns:', cols)
-    pr = q("""SELECT Region, Year, ROUND(AVG(Value)*3.6,2) FROM duals_EB2_EnergyBalanceEachTS WHERE Scenario=? AND Fuel='Gas_Natural' AND Year IN (2025,2030,2040) GROUP BY 1,2 ORDER BY 1,2""", [S])
-    print('--- Gas_Natural price, simple avg of timeslice duals x3.6 (EUR/MWh; HH path 10-12 EUR/MWh):')
-    for r in pr: print(f'  {r[0]:12s} {r[1]} {r[2]:7.2f}')
+    import statistics, collections
+    sdr = float(q('SELECT "Value" FROM output_switches WHERE Scenario=? AND "Switch"=?', [S, 'socialdiscountrate'])[0][0])
+    y0 = int(q("SELECT MIN(Year) FROM output_production WHERE Scenario=?", [S])[0][0])
+    rows = q('SELECT "Constraint", "Dual" FROM duals_EB2_EnergyBalanceEachTS WHERE Scenario=? AND "Constraint" LIKE ?', [S, '%|Gas_Natural|%'])
+    acc = collections.defaultdict(list)
+    for c, d in rows:
+        pth = c.split('|')  # EB2_EnergyBalanceEachTS|year|timeslice|fuel|region
+        acc[(pth[4], int(pth[1]))].append(d)
+    yrs = [y for y in (2025, 2030, 2035, 2040) if any(k[1] == y for k in acc)]
+    print(f'\n--- Gas_Natural shadow price, mean over timeslices, undiscounted at {sdr:.3f} (EUR/GJ; HH 2025 ~3.1, base folded path 3.7/4.8/4.8/4.4)')
+    print('  ' + ' '.join(f'{y:>7d}' for y in yrs))
+    for r in sorted({k[0] for k in acc}):
+        print(f'  {r:11s}' + ' '.join(f'{statistics.mean(acc[(r, y)]) * (1 + sdr) ** (y - y0):7.2f}' for y in yrs))
 except Exception as e:
     print('duals query failed:', str(e)[:200])
 
