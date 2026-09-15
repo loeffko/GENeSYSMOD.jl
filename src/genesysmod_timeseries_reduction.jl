@@ -168,7 +168,8 @@ function timeseries_reduction!(Params, Sets, Switch)
         "Power_BEVs" => "POWER_BEVS",
     )
 
-    merge!(keys_mapping, _read_fuel_timeseries_tags(Switch))
+    fuel_ts_tags = _read_fuel_timeseries_tags(Switch)   # data-bound demand-fuel profiles (Par_TagFuelToTimeseries)
+    merge!(keys_mapping, fuel_ts_tags)
     Country_Data_Entries= unique([keys_mapping[k] for k ∈ intersect(keys(keys_mapping), union(Sets.Fuel, Sets.Technology))])
 
     sector_to_tech = Dict(
@@ -469,8 +470,9 @@ function timeseries_reduction!(Params, Sets, Switch)
     end =#
 
     tmp=Dict()
-    for t ∈ intersect(Country_Data_Entries, ["LOAD", "MOBILITY_PSNG", "HEAT_LOW", "HEAT_HIGH", "COOL_LOW",
-            "POWER_DATACENTER", "POWER_BUILDINGS_HEAT", "POWER_BUILDINGS_COOLING", "POWER_HYDROGEN", "POWER_BEVS"])
+    for t ∈ intersect(Country_Data_Entries, union(["LOAD", "MOBILITY_PSNG", "HEAT_LOW", "HEAT_HIGH", "COOL_LOW",
+            "POWER_DATACENTER", "POWER_BUILDINGS_HEAT", "POWER_BUILDINGS_COOLING", "POWER_HYDROGEN", "POWER_BEVS"],
+            collect(values(fuel_ts_tags))))
         div = combine(ScaledCountryData[t], names(ScaledCountryData[t]) .=> sum, renamecols=false)
         for col in names(div)
             replace!(div[!, col], 0 => 1)
@@ -482,7 +484,8 @@ function timeseries_reduction!(Params, Sets, Switch)
     # the rest their dummy TS) via keys_mapping in the override loop below.
     power_subdemands = intersect(Sets.Fuel, ["Power_General","Power_DataCenter","Power_Buildings_Heat",
             "Power_Buildings_Cooling","Power_Hydrogen","Power_BEVs"])
-    end_uses = union(["Power"], Params.Tags.TagFuelToSubsets["HeatFuels"], Params.Tags.TagFuelToSubsets["TransportFuels"], power_subdemands)
+    end_uses = union(["Power"], Params.Tags.TagFuelToSubsets["HeatFuels"], Params.Tags.TagFuelToSubsets["TransportFuels"], power_subdemands,
+        intersect(Sets.Fuel, collect(keys(fuel_ts_tags))))   # tagged demand fuels take their bound profile instead of LOAD
     for r ∈ Sets.Region_full
         for f ∈ Sets.Fuel
             if sum(Params.SpecifiedAnnualDemand[r,f,:]) != 0

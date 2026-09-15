@@ -1,3 +1,29 @@
+"""
+Interpolate a Dict{year => value} given at milestone years onto every year in
+`years` (linear between milestones, nearest milestone outside the range).
+"""
+function _fill_year_dict(d::Dict, years)
+    ks = sort(collect(keys(d)))
+    out = Dict{Int,Real}()
+    for y in years
+        yi = Int(y)
+        if haskey(d, yi)
+            out[yi] = d[yi]
+        elseif yi <= ks[1]
+            out[yi] = d[ks[1]]
+        elseif yi >= ks[end]
+            out[yi] = d[ks[end]]
+        else
+            lo = maximum(k for k in ks if k < yi); hi = minimum(k for k in ks if k > yi)
+            out[yi] = d[lo] + (d[hi] - d[lo]) * (yi - lo) / (hi - lo)
+        end
+    end
+    for (k, v) in d   # keep the original milestone entries too
+        out[k] = v
+    end
+    return out
+end
+
 # Run-level overrides for the pacing settings (set by genesysmod() kwargs;
 # defaults match the historical hardcoded values).
 const SET_INVESTMENT_LIMIT = Ref(1.9)
@@ -58,6 +84,12 @@ function genesysmod_settings(Sets, Params, socialdiscountrate)
     #StorageLevelYearStartUpperLimit = Switch.set_storagelevelstart_up
     #StorageLevelYearStartLowerLimit = Switch.set_storagelevelstart_down
 
+
+    # Year-keyed settings are given at milestone years; fill every modelled year by
+    # linear interpolation (nearest value outside the milestone range) so the model
+    # runs at any time resolution / year set without KeyErrors (e.g. 2026).
+    PhaseIn  = _fill_year_dict(PhaseIn,  Sets.Year)
+    PhaseOut = _fill_year_dict(PhaseOut, Sets.Year)
 
     Settings=GENeSYSMOD.Settings(DepreciationMethod,GeneralDiscountRate,TechnologyDiscountRate,SocialDiscountRate,InvestmentLimit,NewRESCapacity,NewRESCapacityRegion,
     StorageLimitOffset,Trajectory2020UpperLimit,Trajectory2020LowerLimit, BaseYearSlack, PhaseIn, PhaseOut)

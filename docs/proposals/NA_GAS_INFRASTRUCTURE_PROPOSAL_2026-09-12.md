@@ -150,9 +150,10 @@ supply curve above reproduces. Flagged proxies: Rockies dry-gas, WCSB, Gulf offs
 | US total | 17,770 | 14,710 (36.9 Bcf/d, matches EIA) |
 
 Profile: monthly non-power shape from the same EIA series (New England Jan 16 % /
-Jul 4 %; SERC Jan 14 % / Jun 6 %) mapped onto `TS_HEAT_LOW`'s hourly heating shape per
-region (ERA5, all 10 NA columns exist) for res/com, flat for industrial: new
-`TS_GAS_NONPOWER` sheet = weighted blend. Trajectory to 2040: flat (AEO2026 reference
+Jul 4 %; SERC Jan 14 % / Jun 6 %), flat within each month, as the new
+`TS_GAS_NONPOWER` sheet (Canada = MISO shape proxy). Implementation note: `TS_HEAT_LOW`
+carries only zero placeholders in its NA columns, so the originally planned hourly
+heating blend was not possible; an hourly ERA5 heating shape for NA is a later refinement. Trajectory to 2040: flat (AEO2026 reference
 is flat-to-slightly-down for res/com, up for industrial) - scenario lever later.
 Canada non-power: CER (pending; proxy ~2,400 PJ).
 
