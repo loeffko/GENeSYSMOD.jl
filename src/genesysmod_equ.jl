@@ -396,6 +396,27 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
   end end end
   print("Cstr: Cap Adequacy B : ",Dates.now()-start,"\n")
 
+  # CA6: per-timeslice cap on the summed USE rate of a fuel in a region
+  # (intra-regional deliverability, e.g. gas takeaway to power plants).
+  # Data-gated: only (r,f,y) with FuelUseRateLimit < 999999 get rows. Month
+  # factor from FuelUseRateLimitMonth; timeslices are hour-of-year indices.
+  start=Dates.now()
+  _month_of_hour(h) = searchsortedfirst([744,1416,2160,2880,3624,4344,5088,5832,6552,7296,8016,8760], h)
+  n_ca6 = 0
+  for y ∈ 𝓨 for r ∈ 𝓡 for f ∈ 𝓕
+    lim = Params.FuelUseRateLimit[r,f,y]
+    lim < 999999 || continue
+    users = [(t,m) for (t,m) ∈ Maps.Set_Tech_MO if Params.InputActivityRatio[r,t,f,m,y] > 0]
+    isempty(users) && continue
+    for l ∈ 𝓛
+      mf = Params.FuelUseRateLimitMonth[r,f,_month_of_hour(Int(l))]
+      @constraint(model, sum(Vars.RateOfActivity[y,l,t,m,r]*Params.InputActivityRatio[r,t,f,m,y] for (t,m) ∈ users)
+        <= lim * mf * 31.536, base_name="CA6_FuelUseRateLimit|$(y)|$(l)|$(f)|$(r)")
+      n_ca6 += 1
+    end
+  end end end
+  n_ca6 > 0 && print("Cstr: Fuel use-rate limits (CA6): $(n_ca6) rows : ",Dates.now()-start,"\n")
+
   ############### Energy Balance A #############
 
   start=Dates.now()
@@ -506,6 +527,12 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
           @constraint(model, (Params.TradeCapacity[r,rr,f,𝓨[i]] == 0 ? Params.InitialMaxNewTradeCapacity[r,rr,f] : 0.0)+(Params.GrowthRateTradeCapacity[r,rr,f,𝓨[i]]*YearlyDifferenceMultiplier(𝓨[i],Sets))*Vars.TotalTradeCapacity[𝓨[i-1],f,r,rr] >= Vars.NewTradeCapacity[𝓨[i],f,r,rr],
           base_name="TrC3_NewTradeCapacityLimitPowerLines|$(𝓨[i])|Power|$(r)|$(rr)")
         end
+        # Non-power corridors (gas, H2, ...): same growth rule, same bootstrap
+        # (replaces the former fenced TrC4a/TrC5a blocks with hardcoded 100/50).
+        if f != "Power" && i > 1 && Params.GrowthRateTradeCapacity[r,rr,f,𝓨[i]] > 0
+          @constraint(model, (Params.TradeCapacity[r,rr,f,𝓨[i]] == 0 ? Params.InitialMaxNewTradeCapacity[r,rr,f] : 0.0)+(Params.GrowthRateTradeCapacity[r,rr,f,𝓨[i]]*YearlyDifferenceMultiplier(𝓨[i],Sets))*Vars.TotalTradeCapacity[𝓨[i-1],f,r,rr] >= Vars.NewTradeCapacity[𝓨[i],f,r,rr],
+          base_name="TrC4a_NewTradeCapacityLimitNonPower|$(𝓨[i])|$(f)|$(r)|$(rr)")
+        end
         # Absolute interconnector bounds on total trade capacity (e.g. the IC Low/High
         # projections): the model picks TotalTradeCapacity within [Min, Max] per pair/year.
         # 999999 = no upper limit; a 0 lower limit is inert.
@@ -546,13 +573,12 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
     end
     =#
     for (f,r,rr) ∈ Maps.Set_Fuel_Regions
-      # POWER-ONLY (US): TrC7 non-power trade-capacity limit disabled (TrC6 power symmetry kept).
-      #=
-      if Params.TradeCapacityGrowthCosts[r,rr,f] > 0 && f != "Power"
+      # TrC7: annual non-power flow cap (data-gated: only tradable non-power fuels
+      # with a route exist in Set_Fuel_Regions; power keeps TrC1 per timeslice).
+      if f != "Power"
         @constraint(model, sum(Vars.Import[𝓨[i],l,f,rr,r] for l ∈ 𝓛) <= Vars.TotalTradeCapacity[𝓨[i],f,r,rr],
-        base_name="TrC7_TradeCapacityLimitNonPower$(𝓨[i])|$(f)|$(r)|$(rr)")
+        base_name="TrC7_TradeCapacityLimitNonPower|$(𝓨[i])|$(f)|$(r)|$(rr)")
       end
-      =#
       if Params.TradeRoute[r,rr,"Power",𝓨[i]] > 0 && f == "Power"
         @constraint(model, Vars.NewTradeCapacity[𝓨[i],"Power",r,rr] >= Vars.NewTradeCapacity[𝓨[i],"Power",rr,r] * Switch.set_symmetric_transmission,
         base_name="TrC6_SymmetricalTransmissionExpansion|$(𝓨[i])|$(r)|$(rr)")
@@ -580,9 +606,39 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
 
 
   ############## Pipeline-specific Capacity Accounting #############
-  # POWER-ONLY (US): all H2/LH2/Gas pipeline trade accounting + flat Gas/H2 import
-  # restrictions disabled — they reference non-power fuels (H2, LH2, GasFuels) and the
-  # Z_Import_Gas / Z_Import_H2 techs, all removed from the NorthAmerica set-filter.
+  # Generic per-timeslice pipeline cap for every tradable non-power fuel: what rr
+  # imports from r in a timeslice is bounded by the corridor capacity r->rr times
+  # the timeslice weight (GAMS TrPA1a/TrPl1aa/TrPl1aaa collapsed into one rule).
+  # Gas fuels sharing one pipeline (GasFuels subset, e.g. Gas_Natural + Gas_Bio +
+  # Gas_Synth) are summed against the Gas_Natural corridor. Data-gated: no rows
+  # unless such a fuel is routed. The H2-blending share variants of the former
+  # block are not carried (switch_hydrogen_blending_share is ignored here).
+  start=Dates.now()
+  gasfuels = intersect(𝓕, get(Params.Tags.TagFuelToSubsets, "GasFuels", String[]))
+  nonpower_pairs = unique([(r,rr) for (f,r,rr) ∈ Maps.Set_Fuel_Regions if f != "Power"])
+  n_tpa = 0
+  for y ∈ 𝓨 for l ∈ 𝓛 for (r,rr) ∈ nonpower_pairs
+    fuels_here = [f for (f,r2,rr2) ∈ Maps.Set_Fuel_Regions if r2 == r && rr2 == rr && f != "Power"]
+    gas_here = [f for f ∈ fuels_here if f ∈ gasfuels]
+    if !isempty(gas_here) && "Gas_Natural" ∈ gas_here
+      @constraint(model, sum(Vars.Import[y,l,f,rr,r] for f ∈ gas_here) <= Vars.TotalTradeCapacity[y,"Gas_Natural",r,rr]*Params.YearSplit[l,y],
+      base_name="TrPA1a_TradeCapacityPipelineAccounting|$(y)|$(l)|$(r)|$(rr)")
+      n_tpa += 1
+    end
+    for f ∈ setdiff(fuels_here, gas_here)
+      @constraint(model, Vars.Import[y,l,f,rr,r] <= Vars.TotalTradeCapacity[y,f,r,rr]*Params.YearSplit[l,y],
+      base_name="TrPl1_TradeCapacityPerTimeslice|$(y)|$(l)|$(f)|$(r)|$(rr)")
+      n_tpa += 1
+    end
+  end end end
+  # Flat-import rule for the external import techs (no more than 5 % above the
+  # timeslice-proportional share of the annual import), if they are in the dataset.
+  for t ∈ intersect(𝓣, ["Z_Import_Gas", "Z_Import_H2"]) for y ∈ 𝓨 for l ∈ 𝓛 for r ∈ 𝓡
+    @constraint(model, Vars.RateOfActivity[y,l,t,1,r] <= sum(Vars.RateOfActivity[y,ll,t,1,r] for ll ∈ 𝓛)*Params.YearSplit[l,y]*1.05,
+    base_name= "TrPA2_FlatImports|$(t)|$(y)|$(l)|$(r)")
+  end end end end
+  n_tpa > 0 && print("Cstr: Pipeline per-timeslice caps: $(n_tpa) rows : ",Dates.now()-start,"\n")
+  # ---- former region-specific block kept for reference (superseded above) ----
   #=
   # H2 / LH2 dedicated trade-capacity limits (GAMS TrPl1aa, TrPl1aaa)
   for y ∈ 𝓨 for l ∈ 𝓛 for (f,r,rr) ∈ Maps.Set_Fuel_Regions
