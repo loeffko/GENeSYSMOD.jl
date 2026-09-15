@@ -128,6 +128,16 @@ function power_only_precompute!(Params, Sets, Switch)
         get(ecpf_d, (alias(f), String(e)), get(ecpf_d, (f, String(e)), 0.0))
     end
 
+    # ---- fuels the power-only workbook models EXPLICITLY (present in its Sets/Fuel:
+    # fuel balance + R_/Z_Import_ supply techs + trade are in the model). For those the
+    # model itself charges the fuel cost (supply-tech VariableCost x activity) and the
+    # emission (E1: EmissionActivityRatio x EmissionContentPerFuel x InputActivityRatio
+    # on the combustion tech). Folding them here as well would double-count both, so
+    # they are excluded from BOTH sums below and from the SKIP-fuel OAR zeroing.
+    # Data-driven: whatever the loaded workbook lists as a fuel is left to the model.
+    explicit_fuels = Set(String.(Sets.Fuel))
+    folded(f) = !(f in explicit_fuels)
+
     # ---- main loop: iterate IAR groups, apply formulas to power-only Params ----
     techs_pwr = Set(String.(Sets.Technology))
     regions   = Set(String.(Sets.Region_full))
@@ -141,14 +151,17 @@ function power_only_precompute!(Params, Sets, Switch)
         # modelled in pwr-only — without a Z_Import_Gas_Synth this mode would have
         # near-zero cost and emissions and dominate, so we zero its Power OAR so the
         # model literally cannot produce Power from it).
-        if any(f in SKIP_FUELS for (f, _) in fuel_in_vals_raw)
+        if any(f in SKIP_FUELS && folded(f) for (f, _) in fuel_in_vals_raw)
             try
                 Params.OutputActivityRatio[r, t, "Power", m, y] = 0.0
             catch
             end
             continue
         end
-        fuel_in_vals = fuel_in_vals_raw
+        # Only the fuels NOT modelled explicitly are folded; a mode whose inputs are
+        # all explicit is left entirely to the model (no VC add, OER stays 0).
+        fuel_in_vals = [(f, v) for (f, v) in fuel_in_vals_raw if folded(f)]
+        isempty(fuel_in_vals) && continue
         oar_list = get(oar_g, (r, t, m, y), Tuple{String,Float64}[])
         oar_total = sum(v for (_, v) in oar_list; init=0.0)
         oar_power = 0.0
@@ -171,7 +184,11 @@ function power_only_precompute!(Params, Sets, Switch)
         n_rows_vc += 1
 
         for e in Sets.Emission
-            emission_pa = sum(v * ec_lookup(f, e) for (f, v) in fuel_in_vals; init=0.0)
+            # Apply the tech's EmissionActivityRatio exactly as E1 does in the full
+            # model (1 = all released; CCS residual fraction; BECCS < 0). Without it
+            # folded CCS techs were charged 100 % of the fuel CO2.
+            ear = try Params.EmissionActivityRatio[r, t, m, e, y] catch; 1.0 end
+            emission_pa = ear * sum(v * ec_lookup(f, e) for (f, v) in fuel_in_vals; init=0.0)
             # Emission per PJ_power: charge ALL input-fuel emission against power
             # output (heat is an unused bonus in power-only and the atmosphere does
             # not care about the cogen credit). For pure-thermal techs this equals

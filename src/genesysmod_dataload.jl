@@ -287,6 +287,9 @@ function add_extras_tags!(in_data, tags::Tags, sets, s_infeas::WithInfeasibility
         haskey(TagFuelToSubsets, k) || (TagFuelToSubsets[k] = String[])
     end
     end_uses = union(["Power"], TagFuelToSubsets["HeatFuels"], TagFuelToSubsets["TransportFuels"])
+    # Data-driven extension: any fuel whose dataset carries an Infeasibility_<Fuel>
+    # technology gets a slack (e.g. an explicit Gas_Natural balance).
+    end_uses = union(end_uses, [f for f in sets.Fuel if "Infeasibility_$(f)" in sets.Technology])
     tags.TagTechnologyToSubsets["DummyTechnology"] = intersect(sets.Technology,["Infeasibility_$(end_use)" for end_use in end_uses])
 end
 
@@ -306,7 +309,9 @@ function update_inftechs_params!(Params, Sets, s_infeas::WithInfeasibilityTechs,
     Params.AvailabilityFactor[:,Params.Tags.TagTechnologyToSubsets["DummyTechnology"],:] .= 0
 
     end_uses = union(["Power"], Params.Tags.TagFuelToSubsets["HeatFuels"], Params.Tags.TagFuelToSubsets["TransportFuels"])
+    end_uses = union(end_uses, [f for f in Sets.Fuel if "Infeasibility_$(f)" in Sets.Technology])
     for end_use in end_uses
+        "Infeasibility_$(end_use)" in Sets.Technology || continue
         Params.OutputActivityRatio[:,"Infeasibility_$(end_use)",end_use,1,:] .= 1
     end
 
@@ -424,6 +429,14 @@ function read_params(in_data, Sets, Switch, Tags)
     InitialMaxNewTradeCapacity = "Par_InitialMaxNewTradeCapacity" ∈ XLSX.sheetnames(in_data) ?
         create_daa_init(in_data, "Par_InitialMaxNewTradeCapacity", 0, 𝓡, 𝓡, 𝓕) :
         DenseArray(zeros(length(𝓡), length(𝓡), length(𝓕)), 𝓡, 𝓡, 𝓕)
+    # Per-timeslice fuel use-rate cap (intra-regional deliverability), optional sheets:
+    # limit default 999999 (= none), month factor default 1.
+    FuelUseRateLimit = "Par_FuelUseRateLimit" ∈ XLSX.sheetnames(in_data) ?
+        create_daa_init(in_data, "Par_FuelUseRateLimit", 999999, 𝓡, 𝓕, 𝓨) :
+        DenseArray(fill(999999.0, length(𝓡), length(𝓕), length(𝓨)), 𝓡, 𝓕, 𝓨)
+    FuelUseRateLimitMonth = "Par_FuelUseRateLimitMonth" ∈ XLSX.sheetnames(in_data) ?
+        create_daa_init(in_data, "Par_FuelUseRateLimitMonth", 1.0, 𝓡, 𝓕, collect(1:12)) :
+        DenseArray(ones(length(𝓡), length(𝓕), 12), 𝓡, 𝓕, collect(1:12))
     # Absolute interconnector bounds (optional sheets): Max default 999999, Min default 0.
     AnnualMaxTradeCapacity = "Par_AnnualMaxTradeCapacity" ∈ XLSX.sheetnames(in_data) ?
         create_daa_init(in_data, "Par_AnnualMaxTradeCapacity", 999999, 𝓡, 𝓡, 𝓕, 𝓨) :
@@ -614,7 +627,7 @@ function read_params(in_data, Sets, Switch, Tags)
     OperationalLifeStorage,CapitalCostStorage,ResidualStorageCapacity,TechnologyToStorage,
     TechnologyFromStorage,StorageMaxCapacity,TotalAnnualMaxCapacity, NewCapacityExpansionStop,TotalAnnualMinCapacity,
     GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,GroupTotalAnnualMaxNewCapacity,GroupAnnualMaxTradeCapacity,
-    TagTimeIndependentFuel,TechnologyDiscountRate,InitialMaxNewTradeCapacity,
+    TagTimeIndependentFuel,TechnologyDiscountRate,InitialMaxNewTradeCapacity,FuelUseRateLimit,FuelUseRateLimitMonth,
     AnnualSectoralEmissionLimit,TotalAnnualMaxCapacityInvestment,
     TotalAnnualMinCapacityInvestment,TotalTechnologyAnnualActivityUpperLimit,
     TotalTechnologyAnnualActivityLowerLimit, TotalTechnologyModelPeriodActivityUpperLimit,
@@ -728,6 +741,10 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     GroupTotalAnnualMaxNewCapacity = Params_Full.GroupTotalAnnualMaxNewCapacity[:,:,𝓨]
     GroupAnnualMaxTradeCapacity = Params_Full.GroupAnnualMaxTradeCapacity[:,:,𝓨]
     TagTimeIndependentFuel = Params_Full.TagTimeIndependentFuel
+    # Fuel use-rate cap on the aggregated dispatch path: sum keeps the 999999
+    # sentinel above the gate (>= 999999 = no constraint); month factors averaged.
+    FuelUseRateLimit = aggregate_daa(Params_Full.FuelUseRateLimit, 𝓡, 𝓡_full, Sum(), 𝓕, 𝓨)
+    FuelUseRateLimitMonth = aggregate_daa(Params_Full.FuelUseRateLimitMonth, 𝓡, 𝓡_full, Mean(), 𝓕, collect(1:12))
     # rates average (not sum) across a region merge
     TechnologyDiscountRate = aggregate_daa(Params_Full.TechnologyDiscountRate, 𝓡, 𝓡_full, Mean(), 𝓣)
     TotalTechnologyAnnualActivityUpperLimit = aggregate_daa(Params_Full.TotalTechnologyAnnualActivityUpperLimit, 𝓡, 𝓡_full, Sum(), 𝓣, 𝓨)
@@ -805,7 +822,7 @@ function get_aggregate_params(Params_Full, Sets, Sets_full)
     TechnologyFromStorage,StorageMaxCapacity,TotalAnnualMaxCapacity,
     NewCapacityExpansionStop,TotalAnnualMinCapacity,
     GroupTotalAnnualMaxCapacity,GroupTotalAnnualMinCapacity,GroupTotalAnnualMaxNewCapacity,GroupAnnualMaxTradeCapacity,
-    TagTimeIndependentFuel,TechnologyDiscountRate,InitialMaxNewTradeCapacity,
+    TagTimeIndependentFuel,TechnologyDiscountRate,InitialMaxNewTradeCapacity,FuelUseRateLimit,FuelUseRateLimitMonth,
     AnnualSectoralEmissionLimit,TotalAnnualMaxCapacityInvestment,
     TotalAnnualMinCapacityInvestment,TotalTechnologyAnnualActivityUpperLimit,
     TotalTechnologyAnnualActivityLowerLimit, TotalTechnologyModelPeriodActivityUpperLimit,

@@ -34,6 +34,26 @@ function create_df_hourly(in_data, tab_name)
     return long_df
 end
 
+# Optional Par_TagFuelToTimeseries sheet (Fuel, Timeseries[, Value]) in the regular
+# input workbook -> Dict fuel => TS suffix (e.g. Gas_Natural => GAS_NONPOWER).
+# Absent sheet = empty Dict. Lets a dataset bind a profile to a new demand fuel
+# without touching the keys_mapping dict in load_reduced_timeserie!.
+function _read_fuel_timeseries_tags(Switch)
+    out = Dict{String,String}()
+    path = joinpath(Switch.inputdir, Switch.data_file * ".xlsx")
+    isfile(path) || return out
+    XLSX.openxlsx(path; mode="r") do xf
+        "Par_TagFuelToTimeseries" in XLSX.sheetnames(xf) || return
+        df = DataFrame(XLSX.gettable(xf["Par_TagFuelToTimeseries"]))
+        for row in eachrow(df)
+            f = row[:Fuel]; ts = row[:Timeseries]
+            (ismissing(f) || ismissing(ts)) && continue
+            out[String(f)] = String(ts)
+        end
+    end
+    return out
+end
+
 """
 Load a precomputed reduced timeseries from an Excel in `inputdir`, bypassing the
 scaling NLP, so two model versions (e.g. GAMS and Julia) can be driven from one
@@ -148,6 +168,7 @@ function timeseries_reduction!(Params, Sets, Switch)
         "Power_BEVs" => "POWER_BEVS",
     )
 
+    merge!(keys_mapping, _read_fuel_timeseries_tags(Switch))
     Country_Data_Entries= unique([keys_mapping[k] for k ∈ intersect(keys(keys_mapping), union(Sets.Fuel, Sets.Technology))])
 
     sector_to_tech = Dict(

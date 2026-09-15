@@ -8,6 +8,8 @@ function genesysmod_bounds(model,Sets,Params, Vars,Settings,Switch,Maps)
     #
 
     end_uses = union(["Power"], Params.Tags.TagFuelToSubsets["HeatFuels"], Params.Tags.TagFuelToSubsets["TransportFuels"])
+    # data-driven: fuels with an Infeasibility_<Fuel> technology in the dataset
+    end_uses = union(end_uses, [f for f in Sets.Fuel if "Infeasibility_$(f)" in Sets.Technology])
     #sub=["Power", "Heat_Low_Residential", "Heat_Low_Industrial", "Heat_Medium_Industrial",
     # "Heat_High_Industrial", "Heat_MediumLow_Industrial", "Heat_MediumHigh_Industrial",
     #  "Heat_Buildings"]
@@ -97,6 +99,7 @@ function genesysmod_bounds(model,Sets,Params, Vars,Settings,Switch,Maps)
         #end
 
         for end_use ∈ end_uses
+            "Infeasibility_$(end_use)" in Sets.Technology || continue
             Params.OutputActivityRatio[:,"Infeasibility_$(end_use)",end_use,1,:] .= 1
         end
         

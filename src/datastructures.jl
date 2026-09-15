@@ -341,8 +341,9 @@ struct Parameters <: InputClass
     # annually, no per-timeslice balance). Optional input sheet.
     TagTimeIndependentFuel ::JuMP.Containers.DenseAxisArray
     # NOTE: field order must match the positional constructor calls in
-    # genesysmod_dataload.jl (TechnologyDiscountRate, then
-    # InitialMaxNewTradeCapacity, both directly after TagTimeIndependentFuel).
+    # genesysmod_dataload.jl (TechnologyDiscountRate, InitialMaxNewTradeCapacity,
+    # FuelUseRateLimit, FuelUseRateLimitMonth - in this order, directly after
+    # TagTimeIndependentFuel).
     # Per-technology discount rate (WACC), (Region, Technology). Optional
     # Par_TechnologyDiscountRate sheet; 0.05 neutral default (the historic
     # flat rate), World rows inherited by every region.
@@ -351,6 +352,14 @@ struct Parameters <: InputClass
     # Fuel) — the bootstrap for the growth-rate trade constraints (replaces
     # the old hardcoded 100/50 constants). Optional sheet; 0 = no bootstrap.
     InitialMaxNewTradeCapacity ::JuMP.Containers.DenseAxisArray
+    # Per-timeslice cap on the summed USE rate of a fuel by all technologies
+    # consuming it in a region, (Region, Fuel, Year), GW (thermal for fuels):
+    # intra-regional deliverability of a single-node region (pipeline takeaway +
+    # storage withdrawal + firm contracts). 999999 = no limit. Optional sheet.
+    FuelUseRateLimit ::JuMP.Containers.DenseAxisArray
+    # Month multiplier on FuelUseRateLimit, (Region, Fuel, Month 1..12), fraction,
+    # default 1 (winter-only constraints). Optional sheet.
+    FuelUseRateLimitMonth ::JuMP.Containers.DenseAxisArray
 
     AnnualSectoralEmissionLimit ::JuMP.Containers.DenseAxisArray
 
