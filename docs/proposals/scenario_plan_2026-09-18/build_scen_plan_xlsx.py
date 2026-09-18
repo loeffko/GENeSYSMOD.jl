@@ -8,7 +8,10 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scen_plan_content import BASELINE, DC_BY_REGION, EXISTING, MODEL_FACTS
-from scen_plan_research import SCENARIOS, ASSUMPTIONS, SOURCES, OPEN_QUESTIONS
+import importlib
+RES = importlib.import_module(os.environ.get('SCEN_RESEARCH', 'scen_plan_research'))
+SCENARIOS, ASSUMPTIONS, SOURCES, OPEN_QUESTIONS = RES.SCENARIOS, RES.ASSUMPTIONS, RES.SOURCES, RES.OPEN_QUESTIONS
+V2 = 'v2' in os.environ.get('SCEN_RESEARCH', '')
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else 'NA_scenario_plan_2026-09.xlsx'
 HDR = PatternFill('solid', fgColor='1F3864'); HFONT = Font(bold=True, color='FFFFFF')
@@ -45,15 +48,15 @@ wb = Workbook(); wb.remove(wb.active)
 # --- README
 ws = wb.create_sheet('README')
 lines = [
-    ('NA model scenario quantification plan', True),
+    ('NA model scenario quantification plan' + (' - v2' if V2 else ''), True),
     (f'Prepared {datetime.date.today().isoformat()} for the 14 requested SE North America scenarios / sensitivities. '
      'Status: PLAN (nothing implemented). Numbers come from web-sourced reports (2025-2026 vintage) plus the model baseline; '
      'every number in "Assumptions" carries a source id or is explicitly marked as an assumption.', False),
     ('', False),
     ('Sheets', True),
-    ('Overview - one row per scenario: direction, model levers, implementation route, feasibility flag, overlap with existing sensitivities, effort, proposed variants.', False),
+    ('Overview - one row per scenario: direction, model levers, implementation route, REPRESENTABILITY flag (can the model do it), EVIDENCE strength (how well sourced - informational, not a value judgement), overlap with existing sensitivities, proposed variants incl. a stretch what-if, effort.', False),
     ('Assumptions - the quantified inputs per scenario (parameter, region, years, value, unit, derivation, source id, confidence, invented flag). This is what gets implemented.', False),
-    ('Feasibility - concerns per scenario (severity, why, workaround). RED = cannot be represented faithfully or no defensible data; YELLOW = representable with simplifications or thin data; GREEN = existing levers and data.', False),
+    ('Feasibility - concerns per scenario with a Type column: model = representation limitation (drives the flag), data = evidence note (does not drive the flag). Flags: GREEN = existing levers; YELLOW = needs a new lever/technology or an approximation; RED = cannot be represented. v2 (2026-09-18): judgement calls and far-fetched what-ifs are legitimate scenario content and are not down-rated; every scenario has a stretch variant; fusion capex = user input.', False),
     ('Sources - reference list (id, organisation, title, date, URL, used for).', False),
     ('Model baseline - what the model currently assumes (FEL26 base demand, funnels, costs, policy), so the deltas are visible.', False),
     ('Existing sensitivities - the v6 sensitivity set the new scenarios can reuse.', False),
@@ -74,10 +77,10 @@ ws.column_dimensions['A'].width = 140
 # --- Overview
 sheet(wb, 'Overview',
       ['ID', 'Scenario', 'Tag', 'What it means for the model', 'Model levers (parameters)', 'Implementation route',
-       'Feasibility', 'Feasibility summary', 'Overlap with existing sensitivities', 'Proposed variants', 'Effort', 'Key external anchors'],
-      [(s['id'], s['name'], s['tag'], s['meaning'], s['levers'], s['route'], s['flag'], s['flag_summary'],
+       'Representability', 'Representability summary', 'Evidence strength (info)', 'Overlap with existing sensitivities', 'Proposed variants (incl. stretch)', 'Effort', 'Key external anchors'],
+      [(s['id'], s['name'], s['tag'], s['meaning'], s['levers'], s['route'], s['flag'], s['flag_summary'], s.get('evidence', ''),
         s['overlap'], s['variants'], s['effort'], s['anchors']) for s in SCENARIOS],
-      [5, 26, 11, 45, 45, 38, 11, 45, 32, 40, 8, 45], flag_col=6, freeze='C2')
+      [5, 26, 11, 45, 45, 38, 12, 45, 28, 32, 48, 8, 45], flag_col=6, freeze='C2')
 
 # --- Assumptions
 sheet(wb, 'Assumptions',
@@ -92,6 +95,8 @@ for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
         row[11].fill = PatternFill('solid', fgColor=FLAG['RED'])
     elif v.startswith('partly'):
         row[11].fill = PatternFill('solid', fgColor=FLAG['YELLOW'])
+    elif v.startswith('user'):
+        row[11].fill = PatternFill('solid', fgColor='BDD7EE')
     c = str(row[10].value or '').lower()
     if c.startswith('high'):
         row[10].fill = PatternFill('solid', fgColor=FLAG['GREEN'])
@@ -103,9 +108,13 @@ for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
 # --- Feasibility
 feas = []
 for s in SCENARIOS:
-    for sev, why, fix in s['concerns']:
-        feas.append((s['id'], s['name'], sev, why, fix))
-sheet(wb, 'Feasibility', ['ID', 'Scenario', 'Severity', 'Concern', 'Workaround / proposal'], feas, [5, 26, 10, 70, 70], flag_col=2)
+    for c in s['concerns']:
+        if len(c) == 4:
+            sev, typ, why, fix = c
+        else:
+            sev, why, fix = c; typ = ''
+        feas.append((s['id'], s['name'], sev, typ, why, fix))
+sheet(wb, 'Feasibility', ['ID', 'Scenario', 'Severity', 'Type', 'Concern', 'Workaround / proposal'], feas, [5, 26, 10, 8, 70, 70], flag_col=2)
 
 # --- Sources
 sheet(wb, 'Sources', ['Source id', 'Organisation', 'Title', 'Date', 'URL', 'Used for'], SOURCES, [10, 26, 60, 12, 60, 30])
