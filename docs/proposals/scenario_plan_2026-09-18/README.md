@@ -1,5 +1,14 @@
 # NA scenario quantification plan (2026-09-18)
 
+**Current version: v2** - `../NA_scenario_plan_2026-09-18_v2.xlsx`. v2 separates representability
+(can the model do it - drives the flag) from evidence strength (informational). Judgement calls and
+far-fetched what-ifs are legitimate scenario content and are not down-rated; every scenario has a
+stretch variant (1C, 2C, 3C, 4C, 5C, 6D, 7D, 8C, 9C, 10C, 11C, 12C, 13C, 14C); fusion capex/FOM/first
+year are USER INPUT rows in Assumptions. Rebuild v2:
+`SCEN_RESEARCH=scen_plan_research_v2 python build_scen_plan_xlsx.py ../NA_scenario_plan_2026-09-18_v2.xlsx`
+
+v1 (superseded): `../NA_scenario_plan_2026-09-18.xlsx`.
+
 Deliverable: `../NA_scenario_plan_2026-09-18.xlsx` (sheets: README, Overview, Assumptions,
 Feasibility, Sources, Model baseline, Existing sensitivities, Open questions).
 
