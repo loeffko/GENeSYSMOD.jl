@@ -45,7 +45,7 @@ def kpis(lab):
         d[f'cap_storage_{y}'] = q("SELECT COALESCE(SUM(Value),0) FROM output_capacity WHERE Scenario=? AND Year=? AND Type='TotalCapacity' AND Technology LIKE 'D_%'", [lab, y])[0][0]
         d[f'cap_ironair_{y}'] = q("SELECT COALESCE(SUM(Value),0) FROM output_capacity WHERE Scenario=? AND Year=? AND Type='TotalCapacity' AND Technology='D_IronAir'", [lab, y])[0][0]
         d[f'cap_ccs_{y}'] = q("SELECT COALESCE(SUM(Value),0) FROM output_capacity WHERE Scenario=? AND Year=? AND Type='TotalCapacity' AND Technology='P_Gas_CCS'", [lab, y])[0][0]
-        d[f'co2_{y}'] = q("SELECT COALESCE(SUM(Value),0)*1000 FROM output_emission WHERE Scenario=? AND Year=? AND Emission='CO2'", [lab, y])[0][0]
+        d[f'co2_{y}'] = q("SELECT COALESCE(SUM(Value),0)*1000 FROM output_emission WHERE Scenario=? AND Year=? AND Emission='CO2' AND Type IN ('Emissions','ExogenousEmissions')", [lab, y])[0][0]
     d['gas_new_2026_40'] = q("SELECT COALESCE(SUM(Value),0) FROM output_capacity WHERE Scenario=? AND Type='NewCapacity' AND Technology LIKE 'P_Gas%' AND Year BETWEEN 2026 AND 2040", [lab])[0][0]
     d['trade_2040'] = q("SELECT COALESCE(SUM(Value),0)/3.6 FROM output_trade WHERE Scenario=? AND Fuel='Power' AND Type='Export' AND Year=2040", [lab])[0][0]
     return d
