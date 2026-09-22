@@ -11,7 +11,9 @@ from scen_plan_content import BASELINE, DC_BY_REGION, EXISTING, MODEL_FACTS
 import importlib
 RES = importlib.import_module(os.environ.get('SCEN_RESEARCH', 'scen_plan_research'))
 SCENARIOS, ASSUMPTIONS, SOURCES, OPEN_QUESTIONS = RES.SCENARIOS, RES.ASSUMPTIONS, RES.SOURCES, RES.OPEN_QUESTIONS
-V2 = 'v2' in os.environ.get('SCEN_RESEARCH', '')
+VER = os.environ.get('SCEN_RESEARCH', 'scen_plan_research').split('_')[-1]
+V2 = VER in ('v2', 'v3')
+V3 = VER == 'v3'
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else 'NA_scenario_plan_2026-09.xlsx'
 HDR = PatternFill('solid', fgColor='1F3864'); HFONT = Font(bold=True, color='FFFFFF')
@@ -48,10 +50,11 @@ wb = Workbook(); wb.remove(wb.active)
 # --- README
 ws = wb.create_sheet('README')
 lines = [
-    ('NA model scenario quantification plan' + (' - v2' if V2 else ''), True),
+    ('NA model scenario quantification plan' + (' - v3 (implementation record)' if V3 else (' - v2' if V2 else '')), True),
     (f'Prepared {datetime.date.today().isoformat()} for the 14 requested SE North America scenarios / sensitivities. '
      'Status: PLAN (nothing implemented). Numbers come from web-sourced reports (2025-2026 vintage) plus the model baseline; '
      'every number in "Assumptions" carries a source id or is explicitly marked as an assumption.', False),
+    ('v3 (2026-09-22): user decisions applied - runs always on the v6 freeze; scenario numbers are used even where the base assumption is already higher (flagged, e.g. Canada DC); numbers of existing sensitivities are reused where sensible but each of the 14 is a separate data scenario and run; fusion from Fusion_Market_Model_v09.xlsx (bull). The Overview column "Implemented (wave 1)" records the variant, data folder and run label per scenario; the Assumptions rows tagged "(implemented)" record the exact settings.' if V3 else '', False),
     ('', False),
     ('Sheets', True),
     ('Overview - one row per scenario: direction, model levers, implementation route, REPRESENTABILITY flag (can the model do it), EVIDENCE strength (how well sourced - informational, not a value judgement), overlap with existing sensitivities, proposed variants incl. a stretch what-if, effort.', False),
@@ -77,10 +80,10 @@ ws.column_dimensions['A'].width = 140
 # --- Overview
 sheet(wb, 'Overview',
       ['ID', 'Scenario', 'Tag', 'What it means for the model', 'Model levers (parameters)', 'Implementation route',
-       'Representability', 'Representability summary', 'Evidence strength (info)', 'Overlap with existing sensitivities', 'Proposed variants (incl. stretch)', 'Effort', 'Key external anchors'],
+       'Representability', 'Representability summary', 'Evidence strength (info)', 'Overlap with existing sensitivities', 'Proposed variants (incl. stretch)', 'Effort', 'Key external anchors'] + (['Implemented (wave 1)'] if V3 else []),
       [(s['id'], s['name'], s['tag'], s['meaning'], s['levers'], s['route'], s['flag'], s['flag_summary'], s.get('evidence', ''),
-        s['overlap'], s['variants'], s['effort'], s['anchors']) for s in SCENARIOS],
-      [5, 26, 11, 45, 45, 38, 12, 45, 28, 32, 48, 8, 45], flag_col=6, freeze='C2')
+        s['overlap'], s['variants'], s['effort'], s['anchors']) + ((s.get('implemented', ''),) if V3 else ()) for s in SCENARIOS],
+      [5, 26, 11, 45, 45, 38, 12, 45, 28, 32, 48, 8, 45] + ([60] if V3 else []), flag_col=6, freeze='C2')
 
 # --- Assumptions
 sheet(wb, 'Assumptions',
