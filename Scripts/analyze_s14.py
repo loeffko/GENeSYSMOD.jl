@@ -9,8 +9,12 @@ con = duckdb.connect(r'C:\Users\testbed\Documents\GENeSYSMOD.jl_SE\Results\genes
 q = lambda s, p=(): con.execute(s, list(p)).fetchall()
 SCEN = ['s01_ev', 's02_h2', 's03_compute', 's04_space', 's05_brakes', 's06_hormuz', 's07_tech', 's08_canada',
         's09_water', 's10_climate', 's11_feoc', 's12_overbuild', 's13_reindustrial', 's14_decarb']
-labels = [f'fel2026_{s}_49_2015_v6' for s in SCEN]
 have = {r[0] for r in q("SELECT DISTINCT Scenario FROM output_production")}
+# prefer the latest _vN rerun of a scenario when present
+def latest(s):
+    cands = sorted([h for h in have if h.startswith(f'fel2026_{s}_49_2015_v6')], key=lambda h: (len(h), h))
+    return cands[-1] if cands else f'fel2026_{s}_49_2015_v6'
+labels = [latest(s) for s in SCEN]
 GRP = """CASE WHEN Technology LIKE 'P_Gas%' THEN 'Gas' WHEN Technology LIKE 'P_Coal%' OR Technology LIKE 'P_Lignite%' THEN 'Coal'
  WHEN Technology LIKE 'P_Nuclear%' THEN 'Nuclear' WHEN Technology='P_Fusion' THEN 'Fusion' WHEN Technology LIKE 'P_PV%' THEN 'Solar'
  WHEN Technology LIKE 'P_Wind%' THEN 'Wind' WHEN Technology LIKE 'P_Hydro%' THEN 'Hydro' WHEN Technology LIKE 'P_Bio%' THEN 'Biomass'
@@ -21,7 +25,8 @@ def kpis(lab):
     import re, os, glob
     d['status'] = '?'
     key = lab.replace('fel2026_', '').split('_49_')[0]
-    logs = [f'Results/_s14_run_{key.split("_")[0]}.log', 'Results/_na_base_v6c.log'] if 'base' not in lab else ['Results/_na_base_v6c.log']
+    suffix = lab.split('_49_2015_v6')[-1]
+    logs = [f'Results/_s14_run_{key.split("_")[0]}{suffix}.log', f'Results/_s14_run_{key.split("_")[0]}.log'] if 'base' not in lab else ['Results/_na_base_v6c.log']
     for lg in logs:
         if os.path.exists(lg):
             m = re.findall(r'post-optimize: status=([A-Z_]+)', open(lg, encoding='utf-8', errors='ignore').read())
