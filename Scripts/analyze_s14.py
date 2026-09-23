@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Summary of the 14 SE scenario runs against the v6c base: INF gate, demand, generation mix,
 capacity, CO2, objective, plus scenario-specific KPIs. Writes Results/s14_summary.csv and prints a table.
-Usage: python Scripts/analyze_s14.py [ref_scenario]"""
+Usage: python Scripts/analyze_s14.py [ref_scenario] [wave: 1|2]"""
 import sys, duckdb, csv
 sys.stdout.reconfigure(encoding='utf-8')
 B = sys.argv[1] if len(sys.argv) > 1 else 'fel2026_base_49_2015_v6c'
@@ -11,9 +11,15 @@ SCEN = ['s01_ev', 's02_h2', 's03_compute', 's04_space', 's05_brakes', 's06_hormu
         's09_water', 's10_climate', 's11_feoc', 's12_overbuild', 's13_reindustrial', 's14_decarb']
 have = {r[0] for r in q("SELECT DISTINCT Scenario FROM output_production")}
 # prefer the latest _vN rerun of a scenario when present
+WAVE = sys.argv[2] if len(sys.argv) > 2 else None   # '1' = first labels, '2' = _v2 (s14 _v4), default = latest
 def latest(s):
-    cands = sorted([h for h in have if h.startswith(f'fel2026_{s}_49_2015_v6')], key=lambda h: (len(h), h))
-    return cands[-1] if cands else f'fel2026_{s}_49_2015_v6'
+    base = f'fel2026_{s}_49_2015_v6'
+    if WAVE == '1':
+        return base if s != 's14_decarb' else base + '_v3'
+    if WAVE == '2':
+        return base + ('_v4' if s == 's14_decarb' else '_v2')
+    cands = sorted([h for h in have if h.startswith(base)], key=lambda h: (len(h), h))
+    return cands[-1] if cands else base
 labels = [latest(s) for s in SCEN]
 GRP = """CASE WHEN Technology LIKE 'P_Gas%' THEN 'Gas' WHEN Technology LIKE 'P_Coal%' OR Technology LIKE 'P_Lignite%' THEN 'Coal'
  WHEN Technology LIKE 'P_Nuclear%' THEN 'Nuclear' WHEN Technology='P_Fusion' THEN 'Fusion' WHEN Technology LIKE 'P_PV%' THEN 'Solar'
@@ -26,7 +32,7 @@ def kpis(lab):
     d['status'] = '?'
     key = lab.replace('fel2026_', '').split('_49_')[0]
     suffix = lab.split('_49_2015_v6')[-1]
-    logs = [f'Results/_s14_run_{key.split("_")[0]}{suffix}.log', f'Results/_s14_run_{key.split("_")[0]}.log'] if 'base' not in lab else ['Results/_na_base_v6c.log']
+    logs = [f'Results/_s14_run_{key.split("_")[0]}{suffix}.log', f'Results/_s14_run_{key.split("_")[0]}.log'] if 'base' not in lab else [f'Results/_s14_run_base_{lab.rsplit("_", 1)[-1]}.log', 'Results/_na_base_v6c.log']
     for lg in logs:
         if os.path.exists(lg):
             m = re.findall(r'post-optimize: status=([A-Z_]+)', open(lg, encoding='utf-8', errors='ignore').read())
