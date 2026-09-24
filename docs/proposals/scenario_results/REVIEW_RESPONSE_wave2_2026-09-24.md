@@ -57,6 +57,10 @@ retiring (30.6 GW in 2040); the difference is forced as new steam units (12 GW 2
 New England) at a placeholder 1,100 MEUR/GW whose own source comment says no new steam is expected. Steam also sits in
 the GasPlants group and consumed part of the turbine-supply budget. Fix: the minimum is clamped to the residual
 capacity of the same region and year (31 rows), so no new steam can be forced; the export label can stay.
+Residual effect found in the v6f probe: New York still builds 1-4 GW of steam after 2037 on its own, because its
+OCGT/CCGT/engine pipeline maxima are essentially the residual fleet (OCGT 2.8, CCGT 1.0 GW) and steam (max 10 GW) is
+the only firm option left for the peaking constraint. Not a floor artefact any more; v7 item (New York gas pipeline
+maxima vs peaking requirement).
 
 ### N5 (Note) geothermal label - export only
 
@@ -102,6 +106,17 @@ funnel run as well. Peaking caveat stated with the twins.
 
 ## Wave-3 verification (filled from the runs)
 
-- Base v6f vs v6e: rooftop additions <= cap every year, no new steam, everything else within noise.
-- s06 v4: 2026-27 rooftop builds <= cap. s10 v3: no 2030 peaker jump.
-- Twins: new CCGT+OCGT 2031-40 below the funnel path; s14 twin resource cost net of transfers.
+- Base v6f vs v6e (run 2026-09-24 12:16, OPTIMAL, INF 4.4 TWh, objective +0.07 %): rooftop additions sit exactly on the
+  cap every year (7.0 GW 2026-30 -> 9.7 GW 2039; rooftop fleet 46 GW in 2031 instead of 188, 115 GW in 2040 instead
+  of 188); no forced steam (New York builds 0.7-1.5 GW on its own 2038-40, see N4). Consequence of the cap: the base
+  has less solar and more gas in the 2030s - 2030 solar 700 vs 885 TWh, gas 2,003 vs 1,821; 2035 solar 1,281 vs 1,423,
+  gas 2,495 vs 2,385; 2040 solar 1,788 vs 1,853, gas 2,798 vs 2,770, wind 1,384 vs 1,349; CO2 2040 1,171 vs 1,161 Mt.
+  2025 identical. Largest regional shifts in the funnel years (PJM 2029 solar 54 vs 119 TWh, New England 2030 8 vs 22).
+- s10 v3 (OPTIMAL, INF 4.4): the 2030 step is gone - OCGT +18 TWh in 2030 (was +97), rising with the ramp to +125 in
+  2034 while the residual CCGT loses -96 TWh; the shift itself remains, as it is the residual fleet's CF cap.
+- s06 v4 (OPTIMAL, INF 2.5): the pre-build is gone - 2026/27 new capacity equals the base (rooftop 7.8 / 7.3 GW on the
+  cap, utility 29.8 / 35.8 identical, wind +0.3 / +1.6, storage 0 / +2.4 GW). Cost by year: +1.6 / +11.0 (2026-27
+  shock), -9.6 / -13.1 / -8.7 / -4.1 (recession 2028-31), +3.9 / +3.0 (2032-33); net -16 bEUR; 2040 mix = base.
+- Twins (13, all OPTIMAL, INF 2.5-5.0): release worth -18 to -27 bEUR per scenario (s14 -40, s12 -50), 90-216 GW less
+  gas capacity, new CCGT+OCGT 2031-40 = 108 GW in the s14 twin vs 306 with the funnel; s14 twin resource cost +106
+  bEUR (funnel run +149), CO2 682 vs 670 Mt (residual CCGT runs harder). Details in the wave-3 results doc.
