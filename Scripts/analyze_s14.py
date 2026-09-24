@@ -11,13 +11,13 @@ SCEN = ['s01_ev', 's02_h2', 's03_compute', 's04_space', 's05_brakes', 's06_hormu
         's09_water', 's10_climate', 's11_feoc', 's12_overbuild', 's13_reindustrial', 's14_decarb']
 have = {r[0] for r in q("SELECT DISTINCT Scenario FROM output_production")}
 # prefer the latest _vN rerun of a scenario when present
-WAVE = sys.argv[2] if len(sys.argv) > 2 else None   # '1' = first labels, '2' = _v2 (s14 _v4), default = latest
+WAVE = sys.argv[2] if len(sys.argv) > 2 else None   # '1' = first labels, '2' = _v2 (s14 _v4, s03/s06 _v3), default = latest
 def latest(s):
     base = f'fel2026_{s}_49_2015_v6'
     if WAVE == '1':
         return base if s != 's14_decarb' else base + '_v3'
-    if WAVE == '2':
-        return base + ('_v4' if s == 's14_decarb' else '_v2')
+    if WAVE == '2':   # s03/s06: _v2 carried stale overlay rows, _v3 is the wave-2 run
+        return base + {'s14_decarb': '_v4', 's03_compute': '_v3', 's06_hormuz': '_v3'}.get(s, '_v2')
     cands = sorted([h for h in have if h.startswith(base)], key=lambda h: (len(h), h))
     return cands[-1] if cands else base
 labels = [latest(s) for s in SCEN]
@@ -62,6 +62,7 @@ def kpis(lab):
     d['co2_payments'] = q("""SELECT COALESCE(SUM(e.v * p."Value" / POWER(1.05, e.Year - 2025 + 0.5)), 0) / 1000 FROM
         (SELECT Region, Year, SUM(Value) v FROM output_emission WHERE Scenario=? AND Emission='CO2' AND Type='Emissions' GROUP BY 1,2) e
         JOIN (SELECT Region, Year, "Value" FROM input_EmissionsPenalty WHERE Scenario=? AND Emission='CO2') p USING (Region, Year)""", [lab, lab])[0][0]
+    d['curtail_2040'] = q("SELECT COALESCE(SUM(Value),0)/3.6 FROM raw_CurtailedEnergyAnnual WHERE Scenario=? AND Fuel='Power' AND Year=2040", [lab])[0][0]
     d['trade_2040'] = q("SELECT COALESCE(SUM(Value),0)/3.6 FROM output_trade WHERE Scenario=? AND Fuel='Power' AND Type='Export' AND Year=2040", [lab])[0][0]
     return d
 
@@ -76,7 +77,7 @@ for s, lab in zip(SCEN, labels):
     row = {'scenario': lab, **d}; rows.append(row)
     ddem = d['dem_total_2025_40'] - base['dem_total_2025_40']
     per_mwh = (d['cost'] - base['cost']) * 1e3 / ddem if abs(ddem) > 50 else float('nan')   # EUR/MWh of demand change (undiscounted TWh)
-    print(f'{lab:34s} {d["status"]:14s} {d["inf_twh"]:6.1f} {d["dem_2040"]:7.0f} {d["gen_Gas_2040"]-base["gen_Gas_2040"]:+7.0f} {d["gen_Solar_2040"]-base["gen_Solar_2040"]:+7.0f} {d["gen_Wind_2040"]-base["gen_Wind_2040"]:+8.0f} {d["gen_Nuclear_2040"]-base["gen_Nuclear_2040"]:+7.0f} {d["gen_Fusion_2040"]:6.0f} {d["cap_Gas_2040"]-base["cap_Gas_2040"]:+7.0f} {d["cap_storage_2040"]-base["cap_storage_2040"]:+7.0f} {d["cap_ironair_2040"]:7.0f} {d["cap_ccs_2040"]:5.0f} {d["co2_2040"]-base["co2_2040"]:+8.0f} {d["cost"]-base["cost"]:+7.0f}  | CF sol/wind {d["cf_solar_2040"]:.2f}/{d["cf_wind_2040"]:.2f}  cost/MWh dDem {per_mwh:6.1f}  CO2 pay {d["co2_payments"]:5.0f}')
+    print(f'{lab:34s} {d["status"]:14s} {d["inf_twh"]:6.1f} {d["dem_2040"]:7.0f} {d["gen_Gas_2040"]-base["gen_Gas_2040"]:+7.0f} {d["gen_Solar_2040"]-base["gen_Solar_2040"]:+7.0f} {d["gen_Wind_2040"]-base["gen_Wind_2040"]:+8.0f} {d["gen_Nuclear_2040"]-base["gen_Nuclear_2040"]:+7.0f} {d["gen_Fusion_2040"]:6.0f} {d["cap_Gas_2040"]-base["cap_Gas_2040"]:+7.0f} {d["cap_storage_2040"]-base["cap_storage_2040"]:+7.0f} {d["cap_ironair_2040"]:7.0f} {d["cap_ccs_2040"]:5.0f} {d["co2_2040"]-base["co2_2040"]:+8.0f} {d["cost"]-base["cost"]:+7.0f}  | CF sol/wind {d["cf_solar_2040"]:.2f}/{d["cf_wind_2040"]:.2f}  cost/MWh dDem {per_mwh:6.1f}  CO2 pay {d["co2_payments"]:5.0f}  curt40 {d["curtail_2040"]:5.0f}')
 if rows:
     with open(r'C:\Users\testbed\Documents\GENeSYSMOD.jl_SE\Results\s14_summary.csv', 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=['scenario'] + [k for k in base]); w.writeheader(); w.writerow({'scenario': B, **base}); w.writerows(rows)
