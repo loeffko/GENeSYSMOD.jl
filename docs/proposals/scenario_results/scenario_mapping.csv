@@ -1,0 +1,29 @@
+investment run,dispatch run,name
+fel2026_base_49_2015_v6f,,FEL2026 Base Case
+fel2026_s01_ev_49_2015_v6_v3,,S01 EV Comeback
+fel2026_s02_h2_49_2015_v6_v3,,S02 Hydrogen Comeback
+fel2026_s03_compute_49_2015_v6_v4,,S03 Age of Compute
+fel2026_s04_space_49_2015_v6_v3,,S04 Space Race
+fel2026_s05_brakes_49_2015_v6_v3,,S05 Political Brakes
+fel2026_s06_hormuz_49_2015_v6_v4,,S06 Hormuz Crisis
+fel2026_s07_tech_49_2015_v6_v3,,S07 Breakthrough Technology
+fel2026_s08_canada_49_2015_v6_v3,,S08 Canada AI
+fel2026_s09_water_49_2015_v6_v3,,S09 Water Scarcity
+fel2026_s10_climate_49_2015_v6_v3,,S10 Climate-driven Relocation
+fel2026_s11_feoc_49_2015_v6_v3,,S11 FEOC Restrictions
+fel2026_s12_overbuild_49_2015_v6_v3,,S12 AI Overbuild Correction
+fel2026_s13_reindustrial_49_2015_v6_v3,,S13 Reindustrialization
+fel2026_s14_decarb_49_2015_v6_v5,,S14 Decarb Acceleration
+fel2026_s01_ev_open_49_2015_v6,,S01 EV Comeback - Gas Funnel Released
+fel2026_s02_h2_open_49_2015_v6,,S02 Hydrogen Comeback - Gas Funnel Released
+fel2026_s03_compute_open_49_2015_v6,,S03 Age of Compute - Gas Funnel Released
+fel2026_s04_space_open_49_2015_v6,,S04 Space Race - Gas Funnel Released
+fel2026_s06_hormuz_open_49_2015_v6,,S06 Hormuz Crisis - Gas Funnel Released
+fel2026_s07_tech_open_49_2015_v6,,S07 Breakthrough Technology - Gas Funnel Released
+fel2026_s08_canada_open_49_2015_v6,,S08 Canada AI - Gas Funnel Released
+fel2026_s09_water_open_49_2015_v6,,S09 Water Scarcity - Gas Funnel Released
+fel2026_s10_climate_open_49_2015_v6,,S10 Climate-driven Relocation - Gas Funnel Released
+fel2026_s11_feoc_open_49_2015_v6,,S11 FEOC Restrictions - Gas Funnel Released
+fel2026_s12_overbuild_open_49_2015_v6,,S12 AI Overbuild Correction - Gas Funnel Released
+fel2026_s13_reindustrial_open_49_2015_v6,,S13 Reindustrialization - Gas Funnel Released
+fel2026_s14_decarb_open_49_2015_v6,,S14 Decarb Acceleration - Gas Funnel Released
