@@ -15,14 +15,15 @@ f = lambda r, k: float(r.get(k) or 0.0)   # older csvs lack the KPI columns
 def d(r, k, fmt='{:+,.0f}'):
     x = f(r, k) - f(base, k)
     return '0' if abs(x) < 0.5 else fmt.format(x)
-print('| # | scenario (run) | demand 2040 | gas gen | solar | wind | nuclear | gas GW | storage GW | CO2 | cost (bEUR, 2025-40 disc.) | CF solar/wind 2040 | curtailed 2040 | cost per MWh of extra demand | CO2 payments (bEUR) |')
-print('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
+print('| # | scenario (run) | demand 2040 | gas gen | solar | wind | nuclear | gas GW | storage GW | CO2 | cost (bEUR, 2025-40 disc.) | CF solar/wind 2040 | curtailed 2040 | cost per MWh of extra demand | CO2 payments (bEUR) | resource cost net of transfers (bEUR) |')
+print('|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|')
 print(f'| base | {base["scenario"].split("_")[-1]} | {f(base,"dem_2040"):,.0f} TWh | {f(base,"gen_Gas_2040"):,.0f} | {f(base,"gen_Solar_2040"):,.0f} | {f(base,"gen_Wind_2040"):,.0f} | '
       f'{f(base,"gen_Nuclear_2040"):,.0f} | {f(base,"cap_Gas_2040"):,.0f} | {f(base,"cap_storage_2040"):,.0f} | {f(base,"co2_2040"):,.0f} Mt | {f(base,"cost"):,.0f} | '
-      f'{f(base,"cf_solar_2040"):.2f}/{f(base,"cf_wind_2040"):.2f} | {f(base,"curtail_2040"):,.0f} TWh | - | {f(base,"co2_payments"):.0f} |')
+      f'{f(base,"cf_solar_2040"):.2f}/{f(base,"cf_wind_2040"):.2f} | {f(base,"curtail_2040"):,.0f} TWh | - | {f(base,"co2_payments"):.0f} | - |')
 for r in scen:
     key = r['scenario'].replace('fel2026_', '').split('_49_')[0]
-    n = int(key[1:3]); suffix = r['scenario'].split('_49_2015_v6')[-1].strip('_') or 'v1'
+    is_open = key.endswith('_open'); key = key.replace('_open', '')
+    n = int(key[1:3]); suffix = ('open' if is_open else '') or r['scenario'].split('_49_2015_v6')[-1].strip('_') or 'v1'
     ddem = f(r, 'dem_total_2025_40') - f(base, 'dem_total_2025_40')
     per_mwh = f'{(f(r,"cost") - f(base,"cost")) * 1e3 / ddem:,.1f} EUR' if abs(ddem) > 50 else '-'
     extra = []
@@ -32,4 +33,4 @@ for r in scen:
     gas = d(r, 'cap_Gas_2040') + (f' (+{f(r,"cap_ccs_2040"):.0f} CCS)' if f(r, 'cap_ccs_2040') > 0.5 else '')
     dem = d(r, 'dem_2040') if abs(f(r, 'dem_2040') - f(base, 'dem_2040')) > 0.5 else '0'
     print(f'| {n} | {NAME[key]} ({key}, {suffix}) | {dem} | {d(r,"gen_Gas_2040")} | {d(r,"gen_Solar_2040")} | {d(r,"gen_Wind_2040")} | {nuc} | {gas} | {sto} | '
-          f'{d(r,"co2_2040")} | {d(r,"cost")} | {f(r,"cf_solar_2040"):.2f}/{f(r,"cf_wind_2040"):.2f} | {d(r,"curtail_2040")} | {per_mwh} | {f(r,"co2_payments"):.0f} |')
+          f'{d(r,"co2_2040")} | {d(r,"cost")} | {f(r,"cf_solar_2040"):.2f}/{f(r,"cf_wind_2040"):.2f} | {d(r,"curtail_2040")} | {per_mwh} | {f(r,"co2_payments"):.0f} | {f(r,"resource_cost"):+,.0f} |')
