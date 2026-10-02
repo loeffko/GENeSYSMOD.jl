@@ -1,5 +1,9 @@
 # Colleague feedback on the scenario set - plan for wave 4 (2026-10-02)
 
+**Status 2026-10-02 18:30: implemented and run (18/18 OPTIMAL). Results: `RESULTS_wave4_2026-10-02.md`.** Deviations from the
+plan: s05 = delay + credible tranche (user); s13 includes the point loads (user); s15 leg 3 (BYOG) reported as a metric
+(no model footprint); s17 run as a peaking-constraint diagnostic pair, not a scenario (no active firm-capacity constraint).
+
 ## Sources
 
 | File | Status | Content |
