@@ -10,7 +10,8 @@ base, scen = rows[0], rows[1:]
 NAME = {'s01_ev': 'EV comeback', 's02_h2': 'H2 comeback', 's03_compute': 'Age of compute', 's04_space': 'Space race, terrestrial',
         's05_brakes': 'Political brakes', 's06_hormuz': 'Hormuz 6C', 's07_tech': 'Tech breakthrough', 's08_canada': 'Canada DC, pipeline-consistent',
         's09_water': 'Water boom', 's10_climate': 'Climate reshuffle', 's11_feoc': 'FEOC', 's12_overbuild': 'AI overbuild',
-        's13_reindustrial': 'Reindustrialization', 's14_decarb': 'Decarbonization'}
+        's13_reindustrial': 'Reindustrialization', 's14_decarb': 'Decarbonization', 's07a_ldes': 'Tech breakthrough: LDES',
+        's07b_fusion': 'Tech breakthrough: fusion/SMR', 's15_afford': 'Affordability / cost allocation', 's16_gridhigh': 'Transmission supercycle'}
 f = lambda r, k: float(r.get(k) or 0.0)   # older csvs lack the KPI columns
 def d(r, k, fmt='{:+,.0f}'):
     x = f(r, k) - f(base, k)
@@ -23,7 +24,8 @@ print(f'| base | {base["scenario"].split("_")[-1]} | {f(base,"dem_2040"):,.0f} T
 for r in scen:
     key = r['scenario'].replace('fel2026_', '').split('_49_')[0]
     is_open = key.endswith('_open'); key = key.replace('_open', '')
-    n = int(key[1:3]); suffix = ('open' if is_open else '') or r['scenario'].split('_49_2015_v6')[-1].strip('_') or 'v1'
+    is_h = key.endswith('_hormuz'); key = key.replace('_hormuz', '')
+    n = int(key[1:3]); suffix = ('open' if is_open else '') or ('hormuz' if is_h else '') or r['scenario'].split('_49_2015_v6')[-1].strip('_') or 'v1'
     ddem = f(r, 'dem_total_2025_40') - f(base, 'dem_total_2025_40')
     per_mwh = f'{(f(r,"cost") - f(base,"cost")) * 1e3 / ddem:,.1f} EUR' if abs(ddem) > 50 else '-'
     extra = []

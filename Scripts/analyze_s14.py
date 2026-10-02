@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Summary of the 14 SE scenario runs against the v6c base: INF gate, demand, generation mix,
 capacity, CO2, objective, plus scenario-specific KPIs. Writes Results/s14_summary.csv and prints a table.
-Usage: python Scripts/analyze_s14.py [ref_scenario] [wave: 1|2|3|open]"""
+Usage: python Scripts/analyze_s14.py [ref_scenario] [wave: 1|2|3|open|4]"""
 import sys, duckdb, csv
 sys.stdout.reconfigure(encoding='utf-8')
 B = sys.argv[1] if len(sys.argv) > 1 else 'fel2026_base_49_2015_v6c'
@@ -9,6 +9,12 @@ con = duckdb.connect(r'C:\Users\testbed\Documents\GENeSYSMOD.jl_SE\Results\genes
 q = lambda s, p=(): con.execute(s, list(p)).fetchall()
 SCEN = ['s01_ev', 's02_h2', 's03_compute', 's04_space', 's05_brakes', 's06_hormuz', 's07_tech', 's08_canada',
         's09_water', 's10_climate', 's11_feoc', 's12_overbuild', 's13_reindustrial', 's14_decarb']
+SCEN4 = ['s01_ev', 's03_compute', 's05_brakes', 's06_hormuz', 's07a_ldes', 's07b_fusion', 's08_canada', 's10_climate', 's11_feoc',
+         's12_overbuild', 's13_reindustrial', 's14_decarb', 's15_afford', 's16_gridhigh',
+         's03_compute_hormuz', 's05_brakes_hormuz', 's12_overbuild_hormuz', 's14_decarb_hormuz']
+PEAK4 = ['fel2026_base_peaking_49_2015_v6f', 'fel2026_base_peaking_flexdc_49_2015_v6f']   # diagnostics, wave 4
+if len(sys.argv) > 2 and sys.argv[2] == '4':
+    SCEN = SCEN4
 have = {r[0] for r in q("SELECT DISTINCT Scenario FROM output_production")}
 # prefer the latest _vN rerun of a scenario when present
 WAVE = sys.argv[2] if len(sys.argv) > 2 else None   # '1' = first labels, '2' = _v2 (s14 _v4, s03/s06 _v3), default = latest
@@ -22,6 +28,9 @@ def latest(s):
         return base + {'s14_decarb': '_v5', 's03_compute': '_v4', 's06_hormuz': '_v4'}.get(s, '_v3')
     if WAVE == 'open':   # funnel-released twins (gas minima = residual from 2031); s05 has no twin -> its wave-3 run
         return f'fel2026_{s}_open_49_2015_v6' if s != 's05_brakes' else base + '_v3'
+    if WAVE == '4':   # hub-feedback set on base v6f; s03/s08 unchanged (wave-3 runs), Hormuz variants, new cases v1
+        return {'s03_compute': base + '_v4', 's08_canada': base + '_v3', 's06_hormuz': base + '_v5', 's14_decarb': base + '_v6'}.get(
+            s, base if ('hormuz' in s or s[:3] in ('s07', 's15', 's16')) else base + '_v4')
     cands = sorted([h for h in have if h.startswith(base)], key=lambda h: (len(h), h))
     return cands[-1] if cands else base
 labels = [latest(s) for s in SCEN]
@@ -39,6 +48,9 @@ def kpis(lab):
     logs = [f'Results/_s14_run_{key.split("_")[0]}{suffix}.log', f'Results/_s14_run_{key.split("_")[0]}.log'] if 'base' not in lab else [f'Results/_s14_run_base_{lab.rsplit("_", 1)[-1]}.log', 'Results/_na_base_v6c.log']
     if key.endswith('_open'):
         logs = [f'Results/_s14_run_{key.split("_")[0]}o_open.log']
+    if WAVE == '4':
+        k = key.split('_')[0] + ('h' if key.endswith('_hormuz') else '')
+        logs = [f'Results/_s14_run_w4_{k}.log']
     for lg in logs:
         if os.path.exists(lg):
             m = re.findall(r'post-optimize: status=([A-Z_]+)', open(lg, encoding='utf-8', errors='ignore').read())
@@ -81,6 +93,8 @@ def kpis(lab):
         JOIN (SELECT Region, Technology, Year, "Value" bv FROM input_VariableCost WHERE Scenario=? AND Mode=1) b USING (Region, Technology, Year)
         JOIN (SELECT Region, Technology, Year, SUM(Value) pv FROM output_production WHERE Scenario=? AND Type='Production' AND Fuel='Power' GROUP BY 1,2,3) p USING (Region, Technology, Year)
         WHERE b.bv>s.sv""", [lab, B, lab])[0][0]
+    dc_inc = q("SELECT COALESCE(SUM(CASE WHEN Year=2040 THEN \"Value\" END) - SUM(CASE WHEN Year=2026 THEN \"Value\" END), 0)/3.6 FROM input_SpecifiedAnnualDemand WHERE Scenario=? AND Fuel='Power_DataCenter' AND Region<>'Canada'", [lab])[0][0]
+    d['byog_gw_equiv'] = 0.4 * dc_inc / (8.76 * 0.8)   # hub leg 3 of s15 as a metric: BYOG-equivalent GW vs the gas additions
     d['trade_2040'] = q("SELECT COALESCE(SUM(Value),0)/3.6 FROM output_trade WHERE Scenario=? AND Fuel='Power' AND Type='Export' AND Year=2040", [lab])[0][0]
     return d
 
