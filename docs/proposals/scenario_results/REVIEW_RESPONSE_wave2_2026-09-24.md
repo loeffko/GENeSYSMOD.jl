@@ -94,9 +94,10 @@ The funnel has two sides that deserve different answers.
   wind pipeline maxima to ~2031). Binding in every scenario 2026-30 (all runs build exactly the cap), i.e. the demand
   booms (s02, s03, s13) cannot add gas before 2031 and add it later. These caps encode real turbine backlogs and
   interconnection queues and stay in every run. Their PV side effect was the rooftop bypass (N1), fixed by the cap.
-- **Against opening broadly**: near-term minima are projects under construction; funnel-freed fleets rely on the
-  peaking constraint, which under-secured winter VRE droughts in the v6 `economic` dispatch (VoLL hours, unserved
-  energy; open v7 topic); and the "one identical setup" rule for the 14.
+- **Against opening broadly**: near-term minima are projects under construction; funnel-freed fleets have no
+  firm-capacity backstop in the investment model (correction 2026-10-02: the NA drivers pass `set_peaking_slack = 0`,
+  so the peaking constraints are vacuous, and the reserve switch is off; the v6 `economic` dispatch showed winter
+  VRE-drought scarcity, VoLL hours and unserved energy; open v7 topic); and the "one identical setup" rule for the 14.
 
 **Decision (user, 2026-09-24):** the wave-3 main set keeps the funnel (base and all 14, reference); every scenario
 except s05 gets a **funnel-released twin** with the gas guardrail minimum = residual capacity from 2031 (announced
