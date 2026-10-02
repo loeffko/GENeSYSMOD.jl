@@ -48,8 +48,8 @@ def kpis(lab):
     logs = [f'Results/_s14_run_{key.split("_")[0]}{suffix}.log', f'Results/_s14_run_{key.split("_")[0]}.log'] if 'base' not in lab else [f'Results/_s14_run_base_{lab.rsplit("_", 1)[-1]}.log', 'Results/_na_base_v6c.log']
     if key.endswith('_open'):
         logs = [f'Results/_s14_run_{key.split("_")[0]}o_open.log']
-    if WAVE == '4':
-        k = key.split('_')[0] + ('h' if key.endswith('_hormuz') else '')
+    if WAVE == '4' and 'base' not in lab:
+        k = key.split('_')[0] + ('h' if key.endswith('_hormuz') and key.count('_') >= 2 else '')   # s06_hormuz is the scenario itself
         logs = [f'Results/_s14_run_w4_{k}.log']
     for lg in logs:
         if os.path.exists(lg):
