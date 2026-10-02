@@ -143,10 +143,12 @@ Reading:
   iron-air 52 GW, CO2 -93 Mt, cost -27 bEUR (funnel run: -80 TWh, -1 bEUR).
 - **s12 twin:** the overbuild story with project cancellations: new gas 199 GW instead of 415, gas -946 TWh,
   CO2 -325 Mt, cost -255 bEUR (funnel run -205); firm capacity 1,319 GW vs 1,561 in the base.
-- **Peaking caveat:** the twins keep the model's peaking constraint (firm capacity 2040: base 1,561 GW, s14 twin
-  1,437, s12 twin 1,319 incl. storage credit). The v6 `economic` dispatch showed that funnel-freed fleets can carry
-  winter-drought scarcity that this constraint accepts; the twins have not been dispatch-checked (v7 item
-  `project-peaking-capacity-review`).
+- **Adequacy caveat (corrected 2026-10-02):** no explicit firm-capacity requirement is active in any NA investment
+  run, v6 freeze included: the drivers pass `set_peaking_slack = 0`, which makes the peaking constraints vacuous
+  (`PeakingCapacity >= PeakingDemand x 0`), and `switch_reserve = 0`. Adequacy rests on the 49-hour energy balance
+  alone. Nominal firm capacity 2040 (gas + nuclear + coal + hydro + storage): base 1,561 GW, s14 twin 1,437, s12 twin
+  1,319. The v6 `economic` dispatch showed that funnel-freed fleets can carry winter-drought scarcity; the twins have
+  not been dispatch-checked. Activating a firm-capacity constraint is a v7 baseline item (`project-peaking-capacity-review`).
 
 ## Run notes
 

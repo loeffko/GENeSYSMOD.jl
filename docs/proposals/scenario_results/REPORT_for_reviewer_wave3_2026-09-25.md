@@ -172,9 +172,12 @@ Reading:
 
 1. **Rooftop cap level** (7 -> 10 GW/yr national): the only new number in wave 3. If you have a better distributed-PV
    build-rate series (SEIA / Wood Mackenzie by state), we can regionalise it; the model keeps the split free today.
-2. **Twins are not dispatch-checked.** They keep the investment model's peaking constraint (firm capacity 2040 incl.
-   storage credit: base 1,561 GW, s14 twin 1,437, s12 twin 1,319). The v6 `economic` dispatch showed that funnel-freed
-   fleets can carry winter-drought scarcity the constraint accepts. Treat twin gas GW as a lower bound.
+2. **Twins are not dispatch-checked, and no firm-capacity constraint is active** (correction, 2026-10-02): all NA
+   investment runs, the v6 freeze included, pass `set_peaking_slack = 0`, which makes the peaking constraints vacuous,
+   and the reserve margin switch is off. Adequacy rests on the 49-hour energy balance only. Nominal firm capacity 2040
+   (gas + nuclear + coal + hydro + storage): base 1,561 GW, s14 twin 1,437, s12 twin 1,319. The v6 `economic` dispatch
+   showed that funnel-freed fleets can carry winter-drought scarcity. Treat twin gas GW as a lower bound; a firm-capacity
+   requirement is a v7 baseline item.
 3. **s14 twin CO2 above the funnel run** (682 vs 670 Mt) is real model behaviour (residual CCGT and coal run more), not
    a bug; worth a sentence in any messaging.
 4. **New York steam** (N4 residual) and the general point that NY's gas pipeline maxima equal its residual fleet.
