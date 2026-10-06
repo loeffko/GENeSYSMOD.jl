@@ -75,6 +75,7 @@ lines = [
     ('Model baseline - the Canada node of the frozen base: demand, capacity result and corridor, generation, interconnectors, model facts and levers.', False),
     ('CER comparison - Canada Energy Regulator "Canada\'s Energy Future 2026" paths by scenario and province, the benchmark for the base and for scenario 1.', False),
     ('Open questions - decisions needed before implementation.', False),
+    ('Implemented_p1 - implementation record of the priority-1 runs (2026-10-05/06): data folder, definition as implemented, deviation from the plan, status, headline result. Results: scenario_plan_canada_2026-10-04/RESULTS_canada_p1_2026-10-06.md', False),
     ('', False),
     ('Conventions', True),
     ('Canada is one model node (no provinces, no territories, no off-grid systems). Years 2025-2040 annual; 2050 targets enter through their 2040 waypoint. Demand in busbar TWh. '
@@ -171,6 +172,10 @@ mark_sections(ws, 6)
 
 # --- Open questions
 sheet(wb, 'Open questions', ['#', 'Question', 'Options / recommendation', 'Affects'], [tuple(x) for x in R.OPEN_QUESTIONS], [4, 70, 80, 22])
+
+# --- Implemented (priority 1)
+sheet(wb, 'Implemented_p1', ['Run label', 'Scenario', 'Variant', 'Data folder', 'As implemented', 'Deviation from the plan', 'Status', 'Canada 2040 headline (vs base)'],
+      [tuple(x) for x in R.IMPLEMENTED], [38, 9, 9, 30, 90, 40, 18, 50])
 
 wb.save(OUT)
 print('written', os.path.normpath(OUT), '| scenarios', len(R.SCENARIOS), '| assumptions', len(R.ASSUMPTIONS), '| sources', len(R.SOURCES), '| signals', len(R.SIGNALS), '| runs', len(R.RUNS))
