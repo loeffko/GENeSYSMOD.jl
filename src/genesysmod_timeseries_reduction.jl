@@ -54,6 +54,48 @@ function _read_fuel_timeseries_tags(Switch)
     return out
 end
 
+# Optional Par_TagTechnologyToTimeseries sheet (Technology, Profile[, Value]) in the
+# regular input workbook -> Dict technology => TS suffix. The technology's capacity
+# factor then follows TS_<Profile> (reduced and scaled like every other series), the
+# way renewables follow theirs. Meant for data-declared availability profiles of
+# otherwise firm plants (e.g. thermal heat/cooling-water stress). Absent sheet = empty.
+function _read_tech_timeseries_tags(Switch)
+    out = Dict{String,String}()
+    path = joinpath(Switch.inputdir, Switch.data_file * ".xlsx")
+    isfile(path) || return out
+    XLSX.openxlsx(path; mode="r") do xf
+        "Par_TagTechnologyToTimeseries" in XLSX.sheetnames(xf) || return
+        df = DataFrame(XLSX.gettable(xf["Par_TagTechnologyToTimeseries"]))
+        for row in eachrow(df)
+            t = row[:Technology]; ts = row[:Profile]
+            (ismissing(t) || ismissing(ts)) && continue
+            out[String(t)] = String(ts)
+        end
+    end
+    return out
+end
+
+# Year-banded timeseries variants: a sheet TS_<NAME>_<YYYY> next to TS_<NAME> replaces
+# that profile from model year YYYY on (step function - the latest YYYY <= y applies,
+# years before the first variant keep TS_<NAME>). Returns Dict name => sorted years.
+function _year_variants(sheets, entries)
+    out = Dict{String,Vector{Int}}()
+    for e ∈ entries, s ∈ sheets
+        m = match(Regex("^TS_" * e * "_(\\d{4})\$"), s)
+        m === nothing && continue
+        push!(get!(out, e, Int[]), parse(Int, m.captures[1]))
+    end
+    foreach(sort!, values(out))
+    return out
+end
+
+# Series entry to use for base entry `e` in year `y` (variant name or `e` itself).
+function _variant_for(e, y, variants)
+    ys = get(variants, e, Int[])
+    yy = filter(v -> v <= y, ys)
+    return isempty(yy) ? e : string(e, "_", maximum(yy))
+end
+
 """
 Load a precomputed reduced timeseries from an Excel in `inputdir`, bypassing the
 scaling NLP, so two model versions (e.g. GAMS and Julia) can be driven from one
@@ -170,6 +212,8 @@ function timeseries_reduction!(Params, Sets, Switch)
 
     fuel_ts_tags = _read_fuel_timeseries_tags(Switch)   # data-bound demand-fuel profiles (Par_TagFuelToTimeseries)
     merge!(keys_mapping, fuel_ts_tags)
+    tech_ts_tags = _read_tech_timeseries_tags(Switch)   # data-bound capacity-factor profiles (Par_TagTechnologyToTimeseries)
+    merge!(keys_mapping, tech_ts_tags)
     Country_Data_Entries= unique([keys_mapping[k] for k ∈ intersect(keys(keys_mapping), union(Sets.Fuel, Sets.Technology))])
 
     sector_to_tech = Dict(
@@ -181,6 +225,13 @@ function timeseries_reduction!(Params, Sets, Switch)
     Timeslice_Full = 1:8760
 
     hourly_data = XLSX.readxlsx(joinpath(Switch.inputdir, Switch.hourly_data_file * ".xlsx"))
+
+    # Year-banded variants (TS_<NAME>_<YYYY> sheets) are reduced and scaled like any
+    # other series and swapped in per model year below. No such sheet = no change.
+    ts_year_variants = _year_variants(XLSX.sheetnames(hourly_data), Country_Data_Entries)
+    append!(Country_Data_Entries, [string(e, "_", yy) for (e, ys) ∈ ts_year_variants for yy ∈ ys])
+    isempty(ts_year_variants) || println("Build:   year-banded timeseries variants: ",
+        join(["$(e) from $(join(ys, ", "))" for (e, ys) ∈ sort(collect(ts_year_variants))], "; "))
 
     CountryData = Dict()
     for v ∈ Country_Data_Entries
@@ -334,6 +385,11 @@ function timeseries_reduction!(Params, Sets, Switch)
         smoothing_range["HEAT_PUMP_AIR"] = 3
         smoothing_range["HEAT_PUMP_GROUND"] = 3
         smoothing_range["HYDRO_ROR"] = 3
+    end
+
+    # Year-banded variants smooth like the series they replace
+    for (e, ys) ∈ ts_year_variants, yy ∈ ys
+        smoothing_range[string(e, "_", yy)] = smoothing_range[e]
     end
 
     # If very short time-spans are used (e.g. for testing) decrease smoothing range
@@ -494,14 +550,16 @@ function timeseries_reduction!(Params, Sets, Switch)
         ScaledCountryData[cde] .= round.(ScaledCountryData[cde], digits=6)
     end
 
-    sdp_list=intersect(Sets.Fuel, ["Power","Mobility_Passenger","Mobility_Freight",
+    sdp_list=intersect(Sets.Fuel, vcat(["Power","Mobility_Passenger","Mobility_Freight",
         "Heat_Buildings","Heat_District","Heat_Low_Industrial","Heat_Medium_Industrial",
         "Heat_High_Industrial","Heat_MediumLow_Industrial","Heat_MediumHigh_Industrial",
-        "Cool_Low_Building"])
+        "Cool_Low_Building","Power_General","Power_DataCenter","Power_Buildings_Heat",
+        "Power_Buildings_Cooling","Power_Hydrogen","Power_BEVs"], collect(keys(fuel_ts_tags))))   # exported demand profiles
     rooftop_pv = Switch.model_region == "north_america" ?
                  ["P_PV_Rooftop_Commercial", "P_PV_Rooftop_Residential"] : String[]
     capf_list=intersect(Sets.Technology, vcat(["HB_Heatpump_Aerial","HB_Heatpump_Ground","P_PV_Utility_Opt","P_Wind_Onshore_Opt","P_Wind_Offshore_Transitional","P_Wind_Onshore_Avg","P_Wind_Offshore_Shallow","P_PV_Utility_Inf",
-    "P_Wind_Onshore_Inf","P_Wind_Offshore_Deep","P_PV_Utility_Tracking","P_Hydro_RoR", "P_PV_Utility_Avg"], rooftop_pv))
+    "P_Wind_Onshore_Inf","P_Wind_Offshore_Deep","P_PV_Utility_Tracking","P_Hydro_RoR", "P_PV_Utility_Avg"], rooftop_pv,
+    collect(keys(tech_ts_tags))))   # data-tagged technologies (Par_TagTechnologyToTimeseries) take their bound profile
     #tmp = ScaledCountryData["LOAD"] ./ length(Sets.Timeslice)
     #= for r ∈ Sets.Region_full
         for f ∈ Sets.Fuel
@@ -524,9 +582,10 @@ function timeseries_reduction!(Params, Sets, Switch)
     end =#
 
     tmp=Dict()
-    for t ∈ intersect(Country_Data_Entries, union(["LOAD", "MOBILITY_PSNG", "HEAT_LOW", "HEAT_HIGH", "COOL_LOW",
+    demand_entries = intersect(Country_Data_Entries, union(["LOAD", "MOBILITY_PSNG", "HEAT_LOW", "HEAT_HIGH", "COOL_LOW",
             "POWER_DATACENTER", "POWER_BUILDINGS_HEAT", "POWER_BUILDINGS_COOLING", "POWER_HYDROGEN", "POWER_BEVS"],
             collect(values(fuel_ts_tags))))
+    for t ∈ union(demand_entries, [string(e, "_", yy) for e ∈ demand_entries for yy ∈ get(ts_year_variants, e, Int[])])
         div = combine(ScaledCountryData[t], names(ScaledCountryData[t]) .=> sum, renamecols=false)
         for col in names(div)
             replace!(div[!, col], 0 => 1)
@@ -557,6 +616,14 @@ function timeseries_reduction!(Params, Sets, Switch)
         Params.SpecifiedDemandProfile[r,f,:,y] = Params.SpecifiedDemandProfile[r,f,:,Sets.Year[1]]
     end end end
 
+    # Year-banded demand profiles: from the first variant year on, an end use follows
+    # TS_<NAME>_<YYYY> (latest YYYY <= y); earlier years keep the base profile set above.
+    for r ∈ Sets.Region_full, f ∈ intersect(end_uses, Sets.Fuel), y ∈ Sets.Year
+        v = _variant_for(keys_mapping[f], y, ts_year_variants)
+        v == keys_mapping[f] && continue
+        Params.SpecifiedDemandProfile[r,f,:,y] = tmp[v][Sets.Timeslice,r]
+    end
+
     for y ∈ Sets.Year
         for t ∈ intersect(Sets.Technology, Params.Tags.TagTechnologyToSubsets["Solar"])
             Params.CapacityFactor[:,t,:,y] .= 0
@@ -576,7 +643,7 @@ function timeseries_reduction!(Params, Sets, Switch)
                 end
 
                 for t ∈ setdiff(capf_list, ["HB_Heatpump_Aerial", "HB_Heatpump_Ground"])
-                    Params.CapacityFactor[r,t,:,y] = ScaledCountryData[keys_mapping[t]][Sets.Timeslice,r]
+                    Params.CapacityFactor[r,t,:,y] = ScaledCountryData[_variant_for(keys_mapping[t], y, ts_year_variants)][Sets.Timeslice,r]
                 end
             else
                 if "HB_Heatpump_Aerial" ∈ capf_list
@@ -589,7 +656,7 @@ function timeseries_reduction!(Params, Sets, Switch)
                 end
 
                 for t ∈ setdiff(capf_list, ["HB_Heatpump_Aerial", "HB_Heatpump_Ground"])
-                    Params.CapacityFactor[r,t,:,y] = CountryData[keys_mapping[t]][:,r]
+                    Params.CapacityFactor[r,t,:,y] = CountryData[_variant_for(keys_mapping[t], y, ts_year_variants)][:,r]
                 end
             end
         end

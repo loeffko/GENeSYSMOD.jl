@@ -99,8 +99,15 @@ It reads scenario data from Excel, builds a large LP, solves it
   `load_reduced_timeserie!` (untagged non-Power/Heat/Transport demand fuels get
   the LOAD shape); `Par_FuelUseRateLimit` x `Par_FuelUseRateLimitMonth` (GW-th
   cap on fuel use per timeslice, CA6); `Par_InitialMaxNewTradeCapacity` (virgin
-  corridor bootstrap). Any fuel with an `Infeasibility_<Fuel>` technology in the
-  data gets the slack automatically. Transformation-subset techs cannot build in
+  corridor bootstrap); `Par_TagTechnologyToTimeseries` (Technology, Profile) binds
+  a technology's capacity factor to a `TS_<Profile>` sheet like a renewable
+  (data-declared availability profiles of firm plants, e.g. thermal heat stress;
+  the peaking constraint then credits the tagged plant with its worst-timeslice
+  CF instead of the variable-RES credit). **Year-banded timeseries**: a sheet
+  `TS_<NAME>_<YYYY>` next to `TS_<NAME>` replaces that profile (demand or CF)
+  from model year YYYY on - step function, latest YYYY <= y wins, earlier years
+  keep `TS_<NAME>`; variants are reduced/scaled like any series. Any fuel with
+  an `Infeasibility_<Fuel>` technology in the data gets the slack automatically. Transformation-subset techs cannot build in
   the start year unless tagged `BaseYearBuildable` - size conversion dummies'
   residual capacity with headroom.
 - **Timeseries scaling NLP** (`timeseries_reduction!`): Ipopt solves one joint

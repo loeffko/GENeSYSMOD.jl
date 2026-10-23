@@ -1526,6 +1526,13 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
     MinRunShare = Switch.set_peaking_minrun_share
     RenewableCapacityFactorReduction = Switch.set_peaking_res_cf
     MinThermalShare = Switch.set_peaking_min_thermal
+    # Firm plants whose capacity factor carries a data-declared availability profile
+    # (Par_TagTechnologyToTimeseries, e.g. thermal heat stress) are credited with the
+    # capacity available in their worst timeslice. Without the tag (or with a profile
+    # that reaches zero) the two branches below apply unchanged: any CF < 1 would
+    # otherwise be read as variable RES and get the RES credit.
+    derated_firm = Set(intersect(𝓣, collect(keys(_read_tech_timeseries_tags(Switch)))))
+    MinCapacityFactor = Dict((r,t,y) => minimum(Params.CapacityFactor[r,t,l,y] for l ∈ 𝓛) for r ∈ 𝓡 for t ∈ derated_firm for y ∈ 𝓨)
     for y ∈ 𝓨 for r ∈ 𝓡
       techs = [x for (x,y) ∈ Maps.Set_Tech_FuelIn if y == "Power"]
       @constraint(model,
@@ -1538,7 +1545,8 @@ function genesysmod_equ(model,Sets,Params, Vars,Emp_Sets,Settings,Switch, Maps; 
 
       @constraint(model,
       Vars.PeakingCapacity[y,r] ==
-        sum((SumCapacityFactor[r,t,y] < length(𝓛) ? Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y]*RenewableCapacityFactorReduction*(SumCapacityFactor[r,t,y]/length(𝓛)) : 0)
+        sum((t ∈ derated_firm && MinCapacityFactor[(r,t,y)] > 0) ? Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y]*MinCapacityFactor[(r,t,y)] :
+          (SumCapacityFactor[r,t,y] < length(𝓛) ? Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y]*RenewableCapacityFactorReduction*(SumCapacityFactor[r,t,y]/length(𝓛)) : 0)
         + (SumCapacityFactor[r,t,y] >= length(𝓛) ? Vars.TotalCapacityAnnual[y,t,r]*Params.AvailabilityFactor[r,t,y] : 0)
         for t ∈ setdiff(𝓣,Params.Tags.TagTechnologyToSubsets["StorageDummies"]) if ((t,"Power") in Maps.Set_Tech_FuelOut && sum(Params.OutputActivityRatio[r,t,"Power",m,y] for m ∈ Maps.Tech_MO[t]) != 0)),
         base_name="PC2_PowerPeakingCapacity|$(y)|$(r)")
