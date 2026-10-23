@@ -577,11 +577,19 @@ function dispatch_build_solve_year(switch, solver, solver_attr, results_db, scen
     end
 
     # --- ramping (chronological): Δgen between consecutive timeslices ---
+    #     Plants with a data-declared availability profile (Par_TagTechnologyToTimeseries,
+    #     e.g. thermal heat stress) ramp in utilisation of the available capacity, g/CF,
+    #     so an hour-to-hour change of the availability itself (a forced derate) is not
+    #     counted as a ramp - otherwise a must-run plant sitting at its availability cap
+    #     cannot follow a derate step faster than its ramp-down limit and the year is
+    #     infeasible. Untagged plants (CF 1, or hydro) ramp on output as before.
+    derated_firm = Set(intersect(disp, collect(keys(_read_tech_timeseries_tags(switch)))))
+    rscale(r,d,h) = (d ∈ derated_firm && cf(r,d,h) > 0) ? 1.0 / cf(r,d,h) : 1.0
     for r ∈ 𝓡, d ∈ disp
         (cap[d,r] > 0 && af(r,d) > 0) || continue
         for i ∈ 2:nH
             h = H[i]; hp = H[i-1]
-            @constraint(model, g[r,d,h] - g[r,d,hp] == gup[r,d,h] - gdn[r,d,h])
+            @constraint(model, g[r,d,h] * rscale(r,d,h) - g[r,d,hp] * rscale(r,d,hp) == gup[r,d,h] - gdn[r,d,h])
             @constraint(model, gup[r,d,h] <= rup(d) * cap[d,r] * dur(h))
             @constraint(model, gdn[r,d,h] <= rdn(d) * cap[d,r] * dur(h))
         end

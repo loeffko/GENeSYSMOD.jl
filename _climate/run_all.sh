@@ -4,10 +4,11 @@
 # Serial (single DuckDB writer), restartable via done-files.
 cd "C:/Users/testbed/Documents/GENeSYSMOD.jl_SE"
 export PATH="/c/Users/testbed/AppData/Local/Microsoft/WindowsApps:$PATH"
+JULIA="/c/Users/testbed/AppData/Local/Microsoft/WindowsApps/julia.exe"
 run() { k=$1
   [ -f "_climate/run_done_$k" ] && return 0
   echo "=== run $k $(date +%H:%M)"
-  julia --project=. "_climate/run_$k.jl" > "Results/_climate_run_$k.log" 2>&1
+  "$JULIA" --project=. "_climate/run_$k.jl" > "Results/_climate_run_$k.log" 2>&1
   st=$(grep -o "post-optimize: status=[A-Z_]*" "Results/_climate_run_$k.log" | tail -1)
   echo "    $k -> ${st:-NO STATUS (crash?)}"
   if grep -q "Processed results written" "Results/_climate_run_$k.log" && [ "$st" = "post-optimize: status=OPTIMAL" ]; then
@@ -18,7 +19,7 @@ run() { k=$1
 disp() { k=$1
   [ -f "_climate/disp_done_$k" ] && return 0
   echo "=== dispatch $k $(date +%H:%M)"
-  julia --project=. "_climate/dispatch_$k.jl" > "Results/_climate_dispatch_$k.log" 2>&1
+  "$JULIA" --project=. "_climate/dispatch_$k.jl" > "Results/_climate_dispatch_$k.log" 2>&1
   n=$(grep -c "solve: OPTIMAL" "Results/_climate_dispatch_$k.log")
   echo "    dispatch $k -> $n optimal years"
   grep -q "NA CLIMATE DISPATCH" "Results/_climate_dispatch_$k.log" && touch "_climate/disp_done_$k"
