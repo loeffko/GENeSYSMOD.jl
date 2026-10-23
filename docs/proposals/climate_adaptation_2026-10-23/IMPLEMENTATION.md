@@ -139,6 +139,33 @@ derates kick in, falling to zero by 2035. By region: New York 13, New England 7,
 remaining slack is the 2030 climate kick plus the peaky cooling shape of the two northeastern pools (open point 0).
 The chain is ready to fire; its gate stops after Climate Base if that run is not OPTIMAL.
 
+## Residual load shape and the ISO benchmark (added after the user review)
+
+The cooling carve-out was checked against the 2024 ISO peaks (ERCOT 85.4 GW, PJM 152.7, MISO 122, SPP 54.4, NYISO 29.0,
+ISO-NE 24.9, CAISO 48.4; all in summer; energies approximated from FERC's 2025 State of the Markets average loads),
+scaled to the model's 2025 energy per pool. Findings (interactive page: Cooling Shape Check):
+
+- v6 (heating carve-out on top of the load shape) matches the magnitudes (-13 to +2 %) but peaks in WINTER in seven of
+  nine pools (ERCOT 94.6 GW in January against a measured winter peak of 78 GW): the load shape already contains the
+  heating load. A base defect of v6 that shaped every v6 fleet.
+- the cooling split restores the summer peak but double-counts cooling: +6 % PJM/MISO, +16 % ERCOT/SPP, +22 % New
+  England, +42 % New York (cooling profile 25-28x its mean there).
+- a residual load shape for Power_General (load minus the 2025 heating and cooling components, clipped at zero in 0-47
+  hours per pool, renormalised) puts the base-year total on the measured FEL load shape: summer peaks everywhere,
+  -4 % (ERCOT) to +17 % (New York; the FEL hourly load itself is spikier than NYISO's).
+
+Decision (user, 2026-10-23): residual load shape. Implemented as `TS_POWER_GENERAL` (builder `build_residual_general`)
+bound through `Par_TagFuelToTimeseries` overlays of the four climate options; Canada's cooling returned to
+Power_Buildings_Cooling (`COOLING_IN_GENERAL` empty). Consequence: Climate Base differs from v6f in winter as well (the
+v6 winter double count is gone), which the write-up has to state.
+
+## Dispatch set
+
+After the four investment runs the chain dispatches the Climate Base fleet (`fel2026_climate_base_49_2015_v1`) hourly
+over 2025/2030/2035/2040 under each input set (`_climate/dispatch_<case>.jl`, results keyed
+`fel2026_climate_<case>_dispatch_v1`, new `result_label` option of `genesysmod_dispatch_fullyear`), so the thermal-stress
+effect is also seen on a fixed fleet. Investment runs of the stress cases stay in the chain for the adaptation view.
+
 ## Open points for the user
 
 0. Cooling profile shape in the cool pools: the tools formula gives New England / New York a cooling peak of 25-28

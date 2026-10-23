@@ -27,7 +27,7 @@ for k in cases:
     x = pd.ExcelFile(f)
     sdp = x.parse('SpecifiedDemandProfile'); sdp.columns = ['Region', 'Fuel', 'Timeslice', 'Year', 'Value']
     cf = x.parse('CapacityFactor'); cf.columns = ['Region', 'Technology', 'Timeslice', 'Year', 'Value']
-    for fuel in ('Power_Buildings_Heat', 'Power_Buildings_Cooling'):
+    for fuel in ('Power_General', 'Power_Buildings_Heat', 'Power_Buildings_Cooling'):
         for r in ('ERCOT', 'Canada'):
             d = sdp[(sdp.Fuel == fuel) & (sdp.Region == r)].pivot_table(index='Timeslice', columns='Year', values='Value')
             if d.empty:

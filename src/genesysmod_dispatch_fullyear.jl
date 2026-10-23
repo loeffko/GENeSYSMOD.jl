@@ -908,8 +908,13 @@ function genesysmod_dispatch_fullyear(; years=[2025,2030,2040], scenario,
         emissionPathway="MinimalExample", emissionScenario="globalLimit",
         threads=6, elmod_nthhour=1, cyclic_storage=true, co2_price=:endogenous,
         dispatch_data_file="",
+        result_label="",
         solver_attr=Dict("Method"=>2, "Crossover"=>0, "BarHomogeneous"=>1))
 
+    # `scenario` names the investment solution whose fleet is dispatched; `result_label`
+    # (default: that name) keys the dispatch tables, so one fleet can be dispatched under
+    # several input sets (e.g. thermal-stress sensitivities) without overwriting.
+    rl = isempty(result_label) ? string(scenario) : String(result_label)
     results_db  = _results_db_path_from(resultdir)
     dispatch_db = _dispatch_db_path(resultdir)
     # Weather year of THIS dispatch (the hourly file's year) - the investment
@@ -924,13 +929,13 @@ function genesysmod_dispatch_fullyear(; years=[2025,2030,2040], scenario,
     dcfg = read_dispatch_config(inputdir, dispatch_data_file)
     summary = Dict{Int,Any}()
     for year ∈ years
-        println("\n=== dispatch_fullyear: year $(year), scenario $(scenario) ===")
+        println("\n=== dispatch_fullyear: year $(year), fleet $(scenario), results $(rl) ===")
         switch = _make_dispatch_switch(; year=year, model_region=model_region,
             data_base_region=data_base_region, data_file=data_file, hourly_data_file=hourly_data_file,
             allfuels_data_file=allfuels_data_file, switch_power_only_mode=switch_power_only_mode,
             inputdir=inputdir, resultdir=resultdir, emissionPathway=emissionPathway,
             emissionScenario=emissionScenario, threads=threads, DNLPsolver=DNLPsolver,
-            elmod_nthhour=elmod_nthhour, extr_str=string(scenario))
+            elmod_nthhour=elmod_nthhour, extr_str=rl)
         model, Sets, Params, disp, var, storage_power, H, hidx, demand, balance, V =
             dispatch_build_solve_year(switch, solver, solver_attr, results_db, scenario,
                                       year, cyclic_storage, co2_price, dcfg)
@@ -941,7 +946,7 @@ function genesysmod_dispatch_fullyear(; years=[2025,2030,2040], scenario,
             @warn "year $(year): solver did not certify optimality ($(st)); writing the feasible solution."
         if feasible   # write whenever a feasible solution exists (incl. sub-optimal barrier)
             try
-                ng, ns, nb, nt = write_dispatch_year_db(dispatch_db, scenario, year, wy,
+                ng, ns, nb, nt = write_dispatch_year_db(dispatch_db, rl, year, wy,
                     switch, Sets, disp, var, H, demand, balance, V)
                 summary[year] = (status=st, generation_rows=ng, storage_rows=ns, balance_rows=nb, trade_rows=nt)
                 println("  wrote: $(ng) gen, $(ns) storage, $(nb) balance, $(nt) trade rows")
@@ -955,7 +960,7 @@ function genesysmod_dispatch_fullyear(; years=[2025,2030,2040], scenario,
     end
     # short per-run summary -> console + dispatch DB + CSV
     try
-        write_dispatch_summary(dispatch_db, resultdir, scenario, wy, model_region, emissionPathway, emissionScenario)
+        write_dispatch_summary(dispatch_db, resultdir, rl, wy, model_region, emissionPathway, emissionScenario)
     catch e
         @warn "dispatch summary failed" exception=e
     end
