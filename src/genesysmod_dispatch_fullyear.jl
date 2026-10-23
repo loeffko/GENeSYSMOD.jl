@@ -295,7 +295,8 @@ function _make_dispatch_switch(; year, model_region, data_base_region, data_file
         0, 0, 0, 1.0, 0.15, 0.5, 0.25, 2030, 1, 1, 0, 0, 0, "",
         NoDispatch(), Int16(elmod_nthhour), Int16(1), 0, Int16(daystep), Int16(hourstep),
         NoRawResult(), 0, 0, 0, 0, extr_str, "dispatch", 0,
-        switch_power_only_mode, allfuels_data_file, 0, 0, 0)
+        switch_power_only_mode, allfuels_data_file, 0, 0, 0,
+        0)   # switch_districtheat: EU district-heat band, off in the dispatch
 end
 
 # ---------------------------------------------------------------------------
