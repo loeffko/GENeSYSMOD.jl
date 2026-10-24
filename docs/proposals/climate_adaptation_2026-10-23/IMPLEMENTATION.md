@@ -208,6 +208,54 @@ Full-year hourly dispatch of the Climate Base fleet (2025/2030/2035/2040) under 
   3,316 EUR/MWh in nearly every hour, far beyond the 357 scarcity hours; this looks like the dual of a binding annual
   constraint (availability budget or floor) leaking into the hourly price, not a physical signal.
 
+## Round 2 (2026-10-24): no fossil expansion, and the v6f fleet under the climate inputs
+
+Variants `NorthAmerica_climate_{base,extreme,severe}_nofossil`: TotalAnnualMaxCapacity of every gas, coal and oil
+technology (incl. CCS and CHP) = the v6f total-capacity path per region and year (0.001 GW where v6f has none), so no
+fossil capacity beyond the regular base can be built (labels `fel2026_climate_<case>_nofossil_49_2015_v1`).
+
+| 2040, NA | extreme | extreme_nofossil | base | base_nofossil |
+|---|---|---|---|---|
+| objective bEUR | 3,000 | 4,278 | 2,658 | 2,904 |
+| INF slack PJ (horizon) | 96 | 720 | 1.2 | 94 |
+| gas CCGT / OCGT GW | 611 / 361 | 532 / 258 (= v6f) | 545 / 344 | 532 / 258 |
+| coal GW | 75 | 58 | 58 | 58 |
+| nuclear GW | 149 | 171 | 148 | 167 |
+| solar GW | 1,169 | 1,369 | 1,155 | 1,233 |
+| wind GW | 435 | 556 | 431 | 518 |
+| battery GW | 316 | 506 | 294 | 475 |
+| geothermal GW | 14 | 24 | 12 | 24 |
+
+Why solar + storage barely move in the fossil-free-to-build extreme case (the user's question): renewables are not
+derated (verified: PV, wind and hydro capacity factors identical between Climate Base and extreme, only the 28 tagged
+thermal techs change). With fossil expansion open, the model answers the derate with OCGT/CCGT and keeps coal, because
+the derate also removes firm capacity in the summer evenings where PV has no output. With fossil expansion shut, the
+model adds +200 GW solar, +121 GW wind, +190 GW batteries, +22 GW nuclear and +10 GW geothermal, and then runs into the
+installation ceilings of the data where the slack sits: in PJM and SERC the best PV class (68 / 51 GW), the best
+onshore wind class (22 / 4 GW), Li-ion batteries (39 / 44 GW), large nuclear (42 / 48 GW) and SMRs (6 / 2 GW) are all
+at their TotalAnnualMaxCapacity in 2040; the remaining headroom is the average / inferior PV and wind classes, which
+cannot serve derated summer evenings. Slack therefore persists 2030-2040 (PJM 22-49 PJ/yr, SERC 11-29, MISO from
+2035), 720 PJ in total (2040: 97 PJ = 27 TWh, 0.3 % of demand); the objective delta is mostly the slack penalty. The
+battery ceilings (39 GW PJM, 44 GW SERC) are data potentials worth revisiting before reading this as a physical limit.
+No per-technology annual build cap binds for PV; the rooftop group cap (8.8 GW/yr) does.
+
+Dispatch of the regular v6f fleet under the climate input sets (`fel2026_v6f_climate_<case>_dispatch_v1`) against the
+Climate Base fleet:
+
+| unserved GWh | 2030 | 2035 | 2040 |
+|---|---|---|---|
+| v6f fleet, base inputs | 67 | 8 | 75 |
+| v6f fleet, central | 80 | 8 | 79 |
+| v6f fleet, extreme | 627 | 296 | 934 |
+| v6f fleet, severe | 338 | 200 | 728 |
+| Climate Base fleet, extreme | 4,767 | 0 | 0 |
+| Climate Base fleet, severe | 36 | 0 | 0 |
+
+The v6f fleet, built on the winter-peaking v6 demand, is short in New York in every year (66-75 GWh even with base
+inputs) and under extreme stress loses 0.6-0.9 TWh per year in PJM, New York, New England, MISO and SERC, with hourly
+prices up to 9,000 EUR/MWh in 2040; curtailment is lower than on the Climate Base fleet (74 vs 126 TWh in 2040) because
+it holds 126 GW less solar. The Climate Base fleet is short only in 2030 (the step year) and only under extreme stress.
+
 ## Open points for the user
 
 0. Cooling profile shape in the cool pools: the tools formula gives New England / New York a cooling peak of 25-28
