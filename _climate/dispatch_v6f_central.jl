@@ -1,0 +1,30 @@
+# Full-year hourly dispatch of the regular v6f fleet (investment run fel2026_base_49_2015_v6f)
+# under the base input set: NorthAmerica_climate_central demand profiles and thermal-stress capacity factors (none in the base case).
+# Results keyed fel2026_v6f_climate_central_dispatch_v1 in genesysmod_dispatch_results.duckdb.
+using GENeSYSMOD
+using Gurobi
+using Ipopt
+const FLEET = "fel2026_base_49_2015_v6f"
+const LABEL = "fel2026_v6f_climate_central_dispatch_v1"
+println("
+########## NA climate dispatch v6f fleet / central inputs: fleet $(FLEET) -> $(LABEL) ##########")
+summary = genesysmod_dispatch_fullyear(;
+    years = [2025, 2030, 2035, 2040],
+    scenario = FLEET, result_label = LABEL,
+    dispatch_data_file = "DispatchData_NorthAmerica",
+    model_region = "north_america", data_base_region = "California",
+    data_file = "RegularParameters_NorthAmerica_climate_central",
+    hourly_data_file = "Timeseries_NorthAmerica_climate_central_2015",
+    allfuels_data_file = "RegularParameters_NorthAmerica_allFuels_v6",
+    switch_power_only_mode = 1,
+    inputdir = joinpath(pkgdir(GENeSYSMOD), "InputData"),
+    resultdir = joinpath(pkgdir(GENeSYSMOD), "Results"),
+    solver = Gurobi.Optimizer, DNLPsolver = Ipopt.Optimizer, threads = 6,
+    elmod_nthhour = 1, cyclic_storage = true, co2_price = :endogenous,
+    solver_attr = Dict("Method"=>2, "Crossover"=>0, "BarHomogeneous"=>1, "NumericFocus"=>2, "BarConvTol"=>1e-5))
+println("
+=== DISPATCH SUMMARY ($(LABEL)) ===")
+for y in sort(collect(keys(summary)))
+    println("  $y => ", summary[y])
+end
+println("NA CLIMATE DISPATCH V6F_CENTRAL DONE")

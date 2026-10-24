@@ -4,7 +4,7 @@
 # Serial (single DuckDB writer), restartable via done-files.
 cd "C:/Users/testbed/Documents/GENeSYSMOD.jl_SE"
 export PATH="/c/Users/testbed/AppData/Local/Microsoft/WindowsApps:$PATH"
-JULIA="/c/Users/testbed/AppData/Local/Microsoft/WindowsApps/julia.exe"
+JULIA="/c/Users/testbed/.julia/juliaup/julia-1.12.6+0.x64.w64.mingw32/bin/julia.exe"
 run() { k=$1
   [ -f "_climate/run_done_$k" ] && return 0
   echo "=== run $k $(date +%H:%M)"
