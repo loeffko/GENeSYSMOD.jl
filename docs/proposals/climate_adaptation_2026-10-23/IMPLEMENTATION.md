@@ -166,6 +166,48 @@ over 2025/2030/2035/2040 under each input set (`_climate/dispatch_<case>.jl`, re
 `fel2026_climate_<case>_dispatch_v1`, new `result_label` option of `genesysmod_dispatch_fullyear`), so the thermal-stress
 effect is also seen on a fixed fleet. Investment runs of the stress cases stay in the chain for the adaptation view.
 
+
+## Run results (chain of 2026-10-23/24)
+
+Investment runs, all OPTIMAL (about 28 min each, 49-hour resolution, Gurobi):
+
+| case | objective bEUR | vs Climate Base | INF slack PJ | gas CCGT / OCGT GW 2040 | coal GW 2040 | solar GW 2040 | battery GW 2040 |
+|---|---|---|---|---|---|---|---|
+| v6f (reference) | 2,684 | +1.0 % | 16 | 531 / 258 | 58 | 1,029 | 279 |
+| Climate Base | 2,658 | - | 1.2 | 545 / 344 | 58 | 1,155 | 294 |
+| central | 2,662 | +0.1 % | 1.2 | 546 / 349 | 62 | 1,156 | 295 |
+| extreme | 3,000 | +12.9 % | 96 | 611 / 361 | 75 | 1,169 | 316 |
+| severe | 2,911 | +9.5 % | 61 | 609 / 356 | 66 | 1,172 | 325 |
+
+- Climate Base vs v6f: 2025 generation mix identical (benchmark check unchanged), no fuel group deviates by more than
+  15 % in any year; 2040 carries +104 GW gas (mostly OCGT) and +126 GW solar for the summer peaks.
+- central is indistinguishable from Climate Base (annual-mean derate below 1 %).
+- extreme / severe: the slack sits in 2030-2032, PJM and SERC (extreme 50 + 35 PJ): the derate arrives as a step in
+  2030 (the stress CSVs are identical from 2030 on) while the build-rate caps limit the response for about three years;
+  by 2033 the fleet has adapted (+66 GW CCGT, +17 GW OCGT, +17 GW coal kept, +22 GW batteries in 2040 against Climate
+  Base). The slack penalty (999 MEUR/PJ) accounts for roughly 70-95 bEUR of the +342 bEUR objective delta; the rest is
+  real adaptation and fuel cost.
+
+Full-year hourly dispatch of the Climate Base fleet (2025/2030/2035/2040) under the four input sets:
+
+| case | 2030 unserved GWh | 2030 avg / max price EUR/MWh | 2035 unserved | gas OCGT TWh 2030/2035 | nuclear TWh 2030/2035 |
+|---|---|---|---|---|---|
+| base | 0 | 67 / 123 | 0 | 216 / 50 | 920 / 990 |
+| central | 0 | 67 / 123 | 0 | 221 / 53 | 916 / 986 |
+| extreme | 4,767 (0.08 %) | 718 / 4,500 | 0 | 275 / 93 | 877 / 945 |
+| severe | 36 | 69 / 3,344 | 0 | 260 / 75 | 895 / 963 |
+
+- extreme 2030 on the unadapted fleet: 4.7 TWh unserved, 4.69 TWh of it in PJM over 357 hours (New York 50 GWh,
+  SPP 19, SERC 7); 2035 and 2040 are served (the fleet grows faster than the derate bites). Steam-class plants lose
+  4-5 % of their energy (nuclear -42 TWh, coal -26 TWh in 2030), replaced by OCGT (+59 TWh) and CCGT.
+- Two dispatch fixes were needed on the way: the positional Switch constructor of the dispatch module lacked the
+  newer switch_districtheat field (every dispatch failed), and tagged plants now ramp on utilisation of the available
+  capacity, g/CF, because a must-run plant at its availability cap cannot follow a derate step (up to 0.22/h in the
+  steam profiles) within its ramp-down factor (nuclear 0.15/h) - 2030+ were infeasible otherwise.
+- To check before quoting prices: the PJM and SERC annual average prices in the extreme 2030 dispatch sit at
+  3,316 EUR/MWh in nearly every hour, far beyond the 357 scarcity hours; this looks like the dual of a binding annual
+  constraint (availability budget or floor) leaking into the hourly price, not a physical signal.
+
 ## Open points for the user
 
 0. Cooling profile shape in the cool pools: the tools formula gives New England / New York a cooling peak of 25-28
