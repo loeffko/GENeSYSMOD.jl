@@ -1,4 +1,4 @@
-# No fossil expansion beyond the v6f capacity path (gas/coal/oil TotalAnnualMaxCapacity = v6f). Climate severe: extreme with the historic drought baked in
+# No fossil or nuclear expansion beyond the v6f capacity path (gas/coal/oil/nuclear TotalAnnualMaxCapacity = v6f; nuclear added 2026-10-25, overriding the round-2 run). Climate severe: extreme with the historic drought baked in
 # Data: v6-freeze base (identical to RegularParameters_NorthAmerica_v6f) + NorthAmerica_climate_severe overlays,
 # weather year 2015, v6-era allFuels. Comparison partners: fel2026_base_49_2015_v6f (regular base) and
 # fel2026_climate_base_49_2015_v1 (climate base) for the CF sensitivities.

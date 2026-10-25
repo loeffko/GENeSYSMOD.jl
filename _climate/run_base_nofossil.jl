@@ -1,4 +1,4 @@
-# No fossil expansion beyond the v6f capacity path (gas/coal/oil TotalAnnualMaxCapacity = v6f). Climate Base: v6f data + FEL cooling split / climate-adjusted heating and cooling demand + SSP2-4.5 heating/cooling profiles from 2030 (regular < 2030, 2030 sheet 2030-34, 2035 sheet from 2035); no thermal CF effect
+# No fossil or nuclear expansion beyond the v6f capacity path (gas/coal/oil/nuclear TotalAnnualMaxCapacity = v6f; nuclear added 2026-10-25, overriding the round-2 run). Climate Base: v6f data + FEL cooling split / climate-adjusted heating and cooling demand + SSP2-4.5 heating/cooling profiles from 2030 (regular < 2030, 2030 sheet 2030-34, 2035 sheet from 2035); no thermal CF effect
 # Data: v6-freeze base (identical to RegularParameters_NorthAmerica_v6f) + NorthAmerica_climate_base overlays,
 # weather year 2015, v6-era allFuels. Comparison partners: fel2026_base_49_2015_v6f (regular base) and
 # fel2026_climate_base_nofossil_49_2015_v1 (climate base) for the CF sensitivities.
