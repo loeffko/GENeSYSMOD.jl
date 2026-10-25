@@ -256,6 +256,33 @@ inputs) and under extreme stress loses 0.6-0.9 TWh per year in PJM, New York, Ne
 prices up to 9,000 EUR/MWh in 2040; curtailment is lower than on the Climate Base fleet (74 vs 126 TWh in 2040) because
 it holds 126 GW less solar. The Climate Base fleet is short only in 2030 (the step year) and only under extreme stress.
 
+## Round 3 (2026-10-25/26): no fossil AND no nuclear expansion beyond v6f
+
+User review of round 2: +22 GW nuclear in the no-fossil cases is not credible (few advanceable projects, nuclear is
+derated too). P_Nuclear and P_Nuclear_SMR join the capped technologies; same scenario names, the rerun replaced the
+round-2 rows (chain started 23:00 on the user's instruction, other runs during the day).
+
+| 2040, NA | base | base_nofossil | extreme | extreme_nofossil | severe_nofossil |
+|---|---|---|---|---|---|
+| objective bEUR | 2,658 | 2,999 | 3,000 | 4,400 | 4,194 |
+| INF slack PJ (horizon) | 1.2 | 149 | 96 | 811 | 691 |
+| gas CCGT / OCGT GW | 545 / 344 | 532 / 258 | 611 / 361 | 532 / 258 | 532 / 258 |
+| coal / nuclear GW | 58 / 148 | 58 / 148 | 75 / 149 | 58 / 148 | 58 / 148 |
+| solar / wind GW | 1,155 / 431 | 1,233 / 516 | 1,169 / 435 | 1,371 / 556 | 1,355 / 540 |
+| Li-ion / redox / CAES / PHS GW | 277 / 17 / 4 / 24 | 322 / 153 / 10 / 27 | 278 / 38 / 9 / 25 | 346 / 159 / 12 / 29 | 346 / 158 / 12 / 29 |
+| geothermal GW | 12 | 24 | 14 | 24 | 24 |
+
+With nuclear shut as well, the extreme case leaves 811 PJ unserved over the horizon, rising every year to 111 PJ
+(31 TWh, 0.4 % of demand) in 2040, in PJM (378 PJ), SERC (283) and MISO (84). In those three pools every firm or
+storage option is at its data ceiling in 2040: best PV class (PJM 68/68, SERC 51/51, MISO 123/123 GW), best onshore
+wind class (22/22, 4/4, 39/39), Li-ion (39/39, 44/44, 37/37), redox flow (22/22 in each), CAES (9 of 10 pools), PHS
+(8 of 10), biomass, hydro. What remains is the average / inferior PV and wind classes (half-used, lower CF, no evening
+output) and enhanced geothermal (MISO 0 of 181 GW, too expensive at its cost path). Even base_nofossil, with no derate,
+carries 149 PJ of slack: capping gas at the v6f path already denies the +104 GW the Climate Base builds for the
+summer peaks. The binding limits are the storage and best-class RES potentials in Par_TotalAnnualMaxCapacity,
+especially the per-pool Li-ion (37-44 GW) and redox (22 GW) ceilings; whether a RES + storage adaptation path exists
+is a question about those data ceilings, not about cost.
+
 ## Open points for the user
 
 0. Cooling profile shape in the cool pools: the tools formula gives New England / New York a cooling peak of 25-28
