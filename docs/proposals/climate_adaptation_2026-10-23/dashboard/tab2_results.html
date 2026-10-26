@@ -1,0 +1,240 @@
+<!--STYLE-->
+:root{--heat-lo:#fff3ea;--heat-hi:#b0401a;--cool-lo:#eef4fb;--cool-hi:#1b4f8a}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){--heat-lo:#2a2320;--heat-hi:#f08a4e;--cool-lo:#1f2630;--cool-hi:#7fb3ec} }
+:root[data-theme="dark"]{--heat-lo:#2a2320;--heat-hi:#f08a4e;--cool-lo:#1f2630;--cool-hi:#7fb3ec}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 0 18px;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:9;padding-top:8px}
+.tabs button{font:inherit;font-size:.95rem;font-weight:500;background:none;border:0;border-bottom:3px solid transparent;color:var(--fg-2);padding:8px 14px;cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--s1)}
+.tabs button:focus-visible{outline:2px solid var(--s1);outline-offset:-2px}
+.tabs .seg{margin-left:auto;align-self:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{background:var(--surface);color:var(--fg-2);border:0;border-bottom:0;padding:5px 11px;font:inherit;font-size:.82rem;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--s1);color:#fff}
+.msg{font-size:1.02rem;color:var(--fg-2);margin:.2rem 0 .8rem;max-width:72ch}
+.take{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:.8rem}
+.take div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;font-size:.92rem}
+.take b{display:block;margin-bottom:.3rem}
+.mini{display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle}
+.mini button{font:inherit;font-size:.75rem;border:1px solid var(--line);background:var(--surface);color:var(--fg-2);border-radius:4px;padding:2px 8px;cursor:pointer}
+.mini button[aria-pressed="true"]{background:var(--fg-2);color:var(--bg);border-color:var(--fg-2)}
+.ramp{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--fg-2)}
+.ramp b{display:inline-block;width:90px;height:10px;border-radius:2px}
+.legend i.sq{width:12px;height:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:.3rem 0}
+.chip{font-size:.8rem;border:1px solid var(--line);border-radius:12px;padding:2px 10px;color:var(--fg-2);background:var(--surface)}
+.chip.full{border-color:var(--s2);color:var(--s2)}
+.dl.w{fill:#fff}
+h2.r{font-size:1.25rem;font-weight:600;margin:2.4rem 0 .3rem;text-wrap:balance}
+.foot{font-size:.82rem;color:var(--fg-3);margin:.4rem 0 0}
+<!--/STYLE-->
+<!--BODY-->
+<div class="prose">
+<div class="eyebrow">Model results · GENeSYS-MOD North America · climate inputs SSP2-4.5 (2030 and 2035 series) · 2026-10-26</div>
+<h1>A hotter grid: what today's plan risks, and what planning for it costs</h1>
+<p class="msg">Three climate cases on top of the FEL26 Base: <b>Air temp increase</b> (hotter summers: more cooling, less heating, thermal plants untouched), <b>Severe</b> (plus a drought year: cooling-water limits on the steam plants) and <b>Extreme</b> (plus a historic heat wave: the hardest thermal derates). Select a year above; 2035 is the last year with climate data.</p>
+</div>
+<div class="tiles" id="r_tiles"></div>
+
+<h2 class="r" id="r1">1 · Today's plan in a hotter climate</h2>
+<p class="msg">The FEL26 Base fleet, as planned without climate inputs, dispatched hour by hour under each climate case. Fleets that were planned with the climate inputs have no shortfall in any year and are left out here; they appear in sections 2 and 3.</p>
+<figure>
+  <h3>Unserved energy per year, FEL26 Base fleet</h3>
+  <p class="sub">GWh not served in the hourly dispatch of the whole system. Already the air temperature rise alone leaves a small shortfall every year; a drought or heat-wave year multiplies it, and the 2040 fleet is the most exposed.</p>
+  <div class="legend"><span><i class="sq" style="background:var(--s1)"></i>Air temp increase</span><span><i class="sq" style="background:var(--s3)"></i>Severe (drought)</span><span><i class="sq" style="background:var(--s2)"></i>Extreme (heat wave)</span></div>
+  <div id="r_unsYears"></div>
+</figure>
+<figure>
+  <h3>Where the shortfall sits, <span class="yr"></span></h3>
+  <p class="sub">GWh unserved by pool, FEL26 Base fleet. Hours = hours with any shortfall in that pool.</p>
+  <div class="ramp"><span>0</span><b class="rampHeat"></b><span>max</span></div>
+  <div id="r_unsPool"></div>
+</figure>
+<figure>
+  <h3>When it happens: FEL26 Base fleet, Extreme case, <span class="yr"></span> <span class="mini" id="r_regSel"><button data-r="PJM" aria-pressed="true">PJM</button><button data-r="NewYork" aria-pressed="false">New York</button></span></h3>
+  <p class="sub">Unserved power in GW by hour of day, one row per day with a shortfall. Late afternoon to evening in summer: cooling load high, solar fading, derated plants at their lowest.</p>
+  <div id="r_hourly"></div>
+</figure>
+
+<h2 class="r" id="r2">2 · Planning for it: how the fleet changes</h2>
+<p class="msg">The same cases as investment runs: the model may build what it needs. It answers hotter summers with gas turbines and batteries first, keeps coal online longer under thermal stress, and adds solar for the summer peaks. Renewables are not derated; the derate hits the hours after sunset where solar cannot help.</p>
+<figure>
+  <h3>Installed capacity by technology, <span class="yr"></span></h3>
+  <p class="sub">GW, North America. Grey: FEL26 Base. The three climate cases next to it; values on the bars.</p>
+  <div class="legend"><span><i class="sq" style="background:var(--fg-3)"></i>FEL26 Base</span><span><i class="sq" style="background:var(--s1)"></i>Air temp increase</span><span><i class="sq" style="background:var(--s3)"></i>Severe</span><span><i class="sq" style="background:var(--s2)"></i>Extreme</span></div>
+  <div id="r_cap"></div>
+</figure>
+<figure>
+  <h3>Capacity change against FEL26 Base, <span class="yr"></span></h3>
+  <p class="sub">GW added (right) or avoided (left) by technology.</p>
+  <div class="legend"><span><i class="sq" style="background:var(--s1)"></i>Air temp increase</span><span><i class="sq" style="background:var(--s3)"></i>Severe</span><span><i class="sq" style="background:var(--s2)"></i>Extreme</span></div>
+  <div id="r_capDelta"></div>
+</figure>
+<figure>
+  <h3>Generation change against FEL26 Base, <span class="yr"></span></h3>
+  <p class="sub">TWh. The derated steam plants (nuclear, coal, biomass) give up energy; gas and solar take it.</p>
+  <div class="legend"><span><i class="sq" style="background:var(--s1)"></i>Air temp increase</span><span><i class="sq" style="background:var(--s3)"></i>Severe</span><span><i class="sq" style="background:var(--s2)"></i>Extreme</span></div>
+  <div id="r_genDelta"></div>
+</figure>
+
+<h2 class="r" id="r3">3 · What robustness costs</h2>
+<p class="msg">Total discounted system cost 2025–2040. The climate-robust fleets cost 8–10 % more than the FEL26 Base; the air temperature rise alone is slightly cheaper because the summer-peaking demand shape replaces the winter-heavy one of the FEL26 Base.</p>
+<figure>
+  <h3>System cost 2025–2040 and the price of robustness</h3>
+  <p class="sub">bEUR, discounted at 5 %. Solid: system cost. Hatched top: penalty for energy the optimiser could not serve in the transition years 2030–2032 (the thermal derate arrives as a step while build-rate caps hold the response), not a real cost.</p>
+  <div id="r_cost"></div>
+  <div id="r_costTable"></div>
+</figure>
+
+<h2 class="r" id="r4">4 · Without new thermal or nuclear capacity</h2>
+<p class="msg">Same cases, but gas, coal, oil and nuclear capacity may not exceed the FEL26 Base path. The model then builds every renewable and storage option it is allowed to and still cannot serve PJM, SERC and MISO on summer evenings: their installation ceilings for the best solar and wind classes, lithium, redox-flow, CAES and pumped hydro are used up. Transmission adds only 9 GW; its expansion is rate-capped.</p>
+<figure>
+  <h3>Unserved energy per year, capped cases</h3>
+  <p class="sub">TWh per year in the investment runs with the cap. Dashed: the same cases without the cap, for scale.</p>
+  <div class="legend"><span><i class="sq" style="background:var(--s1)"></i>Air temp increase + cap</span><span><i class="sq" style="background:var(--s3)"></i>Severe + cap</span><span><i class="sq" style="background:var(--s2)"></i>Extreme + cap</span></div>
+  <div id="r_nfSlack"></div>
+</figure>
+<figure>
+  <h3>What the cap buys instead, <span class="yr"></span></h3>
+  <p class="sub">GW, Extreme with the cap minus Extreme without it.</p>
+  <div id="r_nfDelta"></div>
+</figure>
+<figure>
+  <h3>Installation ceilings reached, Extreme with the cap, <span class="yr"></span></h3>
+  <p class="sub">Technologies at 95 % or more of their TotalAnnualMaxCapacity in the three short pools. Orange = at the ceiling.</p>
+  <div id="r_ceil"></div>
+</figure>
+<figure>
+  <h3>System cost with the cap</h3>
+  <p class="sub">bEUR 2025–2040, discounted; solid = system cost, hatched = penalty for unserved energy.</p>
+  <div id="r_nfCost"></div>
+</figure>
+
+<h2 class="r" id="r5">Takeaways</h2>
+<div class="take">
+  <div><b>Today's plan is short under stress.</b> The FEL26 Base fleet loses 0.3–0.9 TWh a year in a heat-wave year, in a few hundred summer-evening hours in PJM and New York. Even the air temperature rise alone leaves a small gap every year.</div>
+  <div><b>Robustness is mostly firm capacity, at 8–10 % extra cost.</b> +60–80 GW of gas turbines and CCGTs, +20–30 GW of batteries, coal kept longer; the fleets planned with the climate inputs have no shortfall.</div>
+  <div><b>The no-new-thermal path runs into the data potentials.</b> With gas and nuclear capped, the binding limits are the storage and best-class renewable ceilings (lithium 37–44 GW, redox 22 GW per pool). Whether that path exists is a question about those numbers.</div>
+</div>
+<p class="foot">Not shown: the Central case (temperature-only derates, within 0.2 % of Air temp increase on every metric) and dispatch prices (a binding annual constraint leaks into the hourly duals). Caveats: one weather year per projection (2030 milder than 2018 in most pools, 2035 hotter); the thermal derate is a step from 2030 on; nuclear is derated like the other steam plants; Canada carries no thermal stress; v6-freeze data basis. Documentation: docs/proposals/climate_adaptation_2026-10-23/IMPLEMENTATION.md.</p>
+<!--/BODY-->
+<!--SCRIPT-->
+(function(){
+const D = DATA2;
+const state = {year: '2035', reg: 'PJM'};
+const NS = 'http://www.w3.org/2000/svg';
+const tip = document.getElementById('tip');
+function showTip(html, ev){ tip.innerHTML = html; tip.style.display = 'block'; const x = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 8); tip.style.left = x + 'px'; tip.style.top = (ev.clientY + 14) + 'px'; }
+function hideTip(){ tip.style.display = 'none'; }
+function el(n, a, parent){ const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (parent) parent.appendChild(e); return e; }
+function txt(parent, x, y, s, cls, anchor){ const t = el('text', {x, y, class: cls || 'lbl', 'text-anchor': anchor || 'start'}, parent); t.textContent = s; return t; }
+function clear(id){ const d = document.getElementById(id); d.innerHTML = ''; return d; }
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function hex2rgb(h){ h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(a, b, t){ const A = hex2rgb(a), B = hex2rgb(b); return 'rgb(' + A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',') + ')'; }
+function niceTicks(max, n){ const raw = max / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p, step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; const t = []; for (let v = 0; v <= max + 1e-9; v += step) t.push(+v.toFixed(6)); return t; }
+const POOLS = ['California', 'WECC', 'SPP', 'MISO', 'ERCOT', 'SERC', 'PJM', 'NewYork', 'NewEngland', 'Canada'];
+const nice = r => r.replace('NewYork', 'New York').replace('NewEngland', 'New England');
+const GROUPS = ['Nuclear', 'Coal', 'Gas CCGT', 'Gas OCGT', 'Hydro', 'Biomass', 'Geothermal', 'Wind', 'Solar', 'Li-ion', 'LDES'];
+const CASES = [['base', 'Air temp increase', '--s1'], ['severe', 'Severe (drought)', '--s3'], ['extreme', 'Extreme (heat wave)', '--s2']];
+const NAME = {v6f: 'FEL26 Base', base: 'Air temp increase', severe: 'Severe', extreme: 'Extreme', base_nf: 'Air temp increase + cap', severe_nf: 'Severe + cap', extreme_nf: 'Extreme + cap'};
+const COL = {v6f: '--fg-3', base: '--s1', severe: '--s3', extreme: '--s2', base_nf: '--s1', severe_nf: '--s3', extreme_nf: '--s2'};
+document.querySelectorAll('.rampHeat').forEach(e => e.style.background = 'linear-gradient(90deg,' + css('--heat-lo') + ',' + css('--heat-hi') + ')');
+const defs = el('defs', {}); const pat = el('pattern', {id: 'hatch', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)'}, defs); el('rect', {width: 6, height: 6, fill: 'var(--surface)'}, pat); el('line', {x1: 0, y1: 0, x2: 0, y2: 6, stroke: 'var(--fg-3)', 'stroke-width': 2}, pat);
+
+function heatmap(id, rows, cols, val, o){
+  o = Object.assign({W: 900, cell: 26, left: 92, top: 28, lo: css('--heat-lo'), hi: css('--heat-hi'), fmt: v => v, vmin: 0, vmax: null, colLabel: c => c, rowLabel: r => r, labelCells: true, tipFmt: null, gap: 2, rotate: false, maxcw: 120}, o || {});
+  const vals = []; rows.forEach(r => cols.forEach(c => { const v = val(r, c); if (v != null && !isNaN(v)) vals.push(v); }));
+  const vmax = o.vmax != null ? o.vmax : Math.max(1e-9, ...vals); const vmin = o.vmin;
+  const cw = Math.max(10, Math.min(o.maxcw, (o.W - o.left - 10) / cols.length)); const ch = o.cell;
+  const H = o.top + rows.length * ch + 8 + (o.rotate ? 26 : 0);
+  const svg = el('svg', {viewBox: '0 0 ' + o.W + ' ' + H, role: 'img'});
+  rows.forEach((r, i) => txt(svg, o.left - 6, o.top + i * ch + ch / 2 + 4, o.rowLabel(r), 'lbl', 'end'));
+  cols.forEach((c, j) => { const t = txt(svg, o.left + j * cw + cw / 2, o.top - 8, o.colLabel(c), 'lbl', o.rotate ? 'start' : 'middle'); if (o.rotate) t.setAttribute('transform', 'rotate(-30 ' + (o.left + j * cw + cw / 2) + ' ' + (o.top - 8) + ')'); });
+  rows.forEach((r, i) => cols.forEach((c, j) => {
+    const v = val(r, c); const x = o.left + j * cw, y = o.top + i * ch;
+    const t = v == null || isNaN(v) ? null : Math.max(0, Math.min(1, (v - vmin) / (vmax - vmin)));
+    const rc = el('rect', {x: x + o.gap / 2, y: y + o.gap / 2, width: cw - o.gap, height: ch - o.gap, rx: 2, fill: t == null ? 'var(--grid)' : mix(o.lo, o.hi, t)}, svg);
+    if (o.labelCells && v != null && !isNaN(v) && cw >= 34) { const lb = txt(svg, x + cw / 2, y + ch / 2 + 4, o.fmt(v), 'dl' + (t > 0.55 ? ' w' : ''), 'middle'); lb.setAttribute('font-size', '10'); }
+    rc.addEventListener('mousemove', ev => showTip(o.tipFmt ? o.tipFmt(r, c, v) : o.rowLabel(r) + ' · ' + o.colLabel(c) + '<br>' + (v == null ? '–' : o.fmt(v)), ev)); rc.addEventListener('mouseleave', hideTip);
+  }));
+  clear(id).appendChild(svg); return svg;
+}
+function hbars(id, cats, series, o){
+  o = Object.assign({W: 900, rowH: 30, left: 110, unit: '', fmt: v => (v > 0 ? '+' : '') + Math.round(v), diverging: true}, o || {});
+  const vals = cats.flatMap(c => series.map(s => s.val(c) || 0)); const vmax = Math.max(1, ...vals.map(Math.abs)) * 1.15; const vmin = o.diverging ? -vmax : 0;
+  const H = 24 + cats.length * o.rowH + 10, pw = o.W - o.left - 20, sc = pw / (vmax - vmin), x0 = o.left - vmin * sc;
+  const svg = el('svg', {viewBox: '0 0 ' + o.W + ' ' + H, role: 'img'}); const ax = el('g', {class: 'axis'}, svg);
+  niceTicks(vmax, o.diverging ? 3 : 5).forEach(t => { (o.diverging ? [t, -t] : [t]).forEach(v => { if (Math.abs(v) <= vmax) { el('line', {x1: x0 + v * sc, x2: x0 + v * sc, y1: 16, y2: H - 10}, ax); txt(ax, x0 + v * sc, 12, (o.diverging && v > 0 ? '+' : '') + v + o.unit, 'lbl', 'middle'); } }); });
+  el('line', {class: 'base', x1: x0, x2: x0, y1: 16, y2: H - 10, stroke: 'var(--fg-3)'}, svg);
+  const bh = (o.rowH - 8) / series.length;
+  cats.forEach((c, i) => { const y = 24 + i * o.rowH; txt(svg, o.left - 8, y + o.rowH / 2 + 2, c, 'lbl', 'end');
+    series.forEach((s, k) => { const v = s.val(c) || 0; const yy = y + 2 + k * bh; const rc = el('rect', {x: Math.min(x0, x0 + v * sc), y: yy, width: Math.abs(v) * sc, height: Math.max(1, bh - 1), fill: s.color, rx: 1}, svg);
+      if (Math.abs(v) >= vmax * 0.03) txt(svg, x0 + v * sc + (v >= 0 ? 4 : -4), yy + bh / 2 + 3, o.fmt(v), 'dl', v >= 0 ? 'start' : 'end');
+      rc.addEventListener('mousemove', ev => showTip(c + ' · ' + s.name + '<br>' + o.fmt(v) + ' ' + o.unit, ev)); rc.addEventListener('mouseleave', hideTip); }); });
+  clear(id).appendChild(svg);
+}
+function vbars(id, groups, series, o){
+  o = Object.assign({W: 900, H: 280, m: {l: 48, r: 16, t: 20, b: 30}, unit: '', fmt: v => Math.round(v), glabel: g => g, hatch: null}, o || {});
+  const m = o.m, W = o.W, H = o.H; const ymax = Math.max(1, ...groups.flatMap(g => series.map(s => (s.val(g) || 0) + (o.hatch ? (o.hatch(g, s) || 0) : 0)))) * 1.12; const y = v => H - m.b - (H - m.t - m.b) * v / ymax;
+  const svg = el('svg', {viewBox: '0 0 ' + W + ' ' + H, role: 'img'}); svg.appendChild(defs.cloneNode(true)); const ax = el('g', {class: 'axis'}, svg);
+  niceTicks(ymax, 4).forEach(t => { el('line', {x1: m.l, x2: W - m.r, y1: y(t), y2: y(t)}, ax); txt(ax, m.l - 6, y(t) + 4, t, 'lbl', 'end'); }); txt(ax, m.l - 6, m.t - 8, o.unit, 'lbl', 'end');
+  el('line', {class: 'base', x1: m.l, x2: W - m.r, y1: y(0), y2: y(0)}, ax);
+  const gw = (W - m.l - m.r) / groups.length, bw = (gw - 16) / series.length - 3;
+  groups.forEach((g, gi) => { txt(ax, m.l + gw * (gi + .5), H - m.b + 16, o.glabel(g), 'lbl', 'middle');
+    series.forEach((s, k) => { const v = s.val(g) || 0; const h2 = o.hatch ? (o.hatch(g, s) || 0) : 0; const x0 = m.l + gw * gi + 8 + k * (bw + 3);
+      const rc = el('rect', {x: x0, y: y(v), width: bw, height: Math.max(0, y(0) - y(v)), fill: s.color}, svg);
+      if (h2 > 0) { el('rect', {x: x0, y: y(v + h2), width: bw, height: y(v) - y(v + h2), fill: 'url(#hatch)', stroke: s.color, 'stroke-width': 1}, svg); }
+      txt(svg, x0 + bw / 2, y(v + h2) - 4, o.fmt(v) + (h2 > 0 ? ' +' + o.fmt(h2) : ''), 'dl', 'middle');
+      rc.addEventListener('mousemove', ev => showTip(o.glabel(g) + ' · ' + s.name + '<br>' + o.fmt(v) + ' ' + o.unit + (h2 > 0 ? '<br>+ ' + o.fmt(h2) + ' ' + o.unit + ' unserved-energy penalty' : ''), ev)); rc.addEventListener('mouseleave', hideTip); }); });
+  clear(id).appendChild(svg);
+}
+
+function render(){
+  const Y = state.year; document.querySelectorAll('#tab-results .yr').forEach(e => e.textContent = Y);
+  document.querySelectorAll('#ySel button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.y === Y)));
+  const inv = D.inv, disp = D.disp;
+  const sm = (k, y) => disp[k].summary[y] || {};
+  const dcost = k => inv[k].cost_excl_slack_bEUR - inv.v6f.cost_excl_slack_bEUR;
+  const slackY = k => inv[k].slack.filter(s => String(s.year) === Y).reduce((a, s) => a + s.PJ, 0) / 3.6;
+  document.getElementById('r_tiles').innerHTML = [
+    ['FEL26 Base fleet, Extreme, ' + Y, (sm('v6f_extreme', Y).unserved_GWh || 0).toFixed(0) + ' <small>GWh unserved</small>', (sm('v6f_extreme', Y).hours || 0) + ' pool-hours short · ' + (sm('v6f_extreme', Y).pools || []).map(nice).join(', ')],
+    ['Cost of robustness, Extreme', '+' + dcost('extreme').toFixed(0) + ' <small>bEUR (+' + (dcost('extreme') / inv.v6f.cost_excl_slack_bEUR * 100).toFixed(0) + ' %)</small>', 'Severe +' + dcost('severe').toFixed(0) + ' bEUR (+' + (dcost('severe') / inv.v6f.cost_excl_slack_bEUR * 100).toFixed(0) + ' %), Air temp ' + dcost('base').toFixed(0) + ' bEUR; 2025–2040, discounted, excl. penalties'],
+    ['Robust fleet ' + Y + ' vs FEL26 Base', '+' + Math.round(inv.extreme.cap[Y]['Gas OCGT'] + inv.extreme.cap[Y]['Gas CCGT'] - inv.v6f.cap[Y]['Gas OCGT'] - inv.v6f.cap[Y]['Gas CCGT']) + ' <small>GW gas</small>', '+' + Math.round(inv.extreme.cap[Y]['Li-ion'] + inv.extreme.cap[Y]['LDES'] - inv.v6f.cap[Y]['Li-ion'] - inv.v6f.cap[Y]['LDES']) + ' GW storage, +' + Math.round(inv.extreme.cap[Y].Solar - inv.v6f.cap[Y].Solar) + ' GW solar (Extreme)'],
+    ['No new thermal or nuclear, ' + Y, slackY('extreme_nf').toFixed(0) + ' <small>TWh unserved</small>', 'Extreme + cap; ceilings of solar, wind and storage exhausted in PJM, SERC, MISO'],
+  ].map(t => '<div class="tile"><div class="k">' + t[0] + '</div><div class="v">' + t[1] + '</div><div class="d">' + t[2] + '</div></div>').join('');
+  /* 1a */
+  vbars('r_unsYears', ['2030', '2035', '2040'], CASES.map(([c, n, col]) => ({name: n, color: css(col), val: y => sm('v6f_' + c, y).unserved_GWh || 0})), {H: 260, unit: 'GWh', fmt: v => Math.round(v)});
+  /* 1b */
+  const uv = (r, c) => { const e = disp['v6f_' + c].unserved.find(u => u.region === r && String(u.year) === Y); return e ? e.GWh : 0; };
+  const uh = (r, c) => { const e = disp['v6f_' + c].unserved.find(u => u.region === r && String(u.year) === Y); return e ? e.hours : 0; };
+  heatmap('r_unsPool', POOLS.filter(r => CASES.some(([c]) => uv(r, c) > 0.5)), CASES.map(c => c[0]), uv, {cell: 26, left: 100, maxcw: 200, fmt: v => v >= 10 ? Math.round(v) + ' GWh' : v.toFixed(1) + ' GWh', colLabel: c => CASES.find(x => x[0] === c)[1], rowLabel: nice, tipFmt: (r, c, v) => nice(r) + ' · ' + CASES.find(x => x[0] === c)[1] + '<br>' + v.toFixed(1) + ' GWh unserved in ' + uh(r, c) + ' hours'});
+  /* 1c */
+  const key = 'v6f_extreme|' + state.reg + '|' + Y; const hm = D.hourly[key];
+  document.querySelectorAll('#r_regSel button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.r === state.reg)));
+  if (hm) { const days = hm.days; const idx = days.map((d, i) => i);
+    const svg = heatmap('r_hourly', idx, [...Array(24).keys()], (i, h) => hm.grid[i][h], {cell: Math.max(9, Math.min(18, 320 / days.length)), left: 60, maxcw: 36, fmt: v => v.toFixed(1), colLabel: h => (h % 3 === 0 ? h + ':00' : ''), rowLabel: i => { const dt = new Date(2015, 0, 1 + days[i]); return (dt.getMonth() + 1) + '/' + dt.getDate(); }, labelCells: false, gap: 1, tipFmt: (i, h, v) => { const dt = new Date(2015, 0, 1 + days[i]); return nice(state.reg) + ' · ' + (dt.getMonth() + 1) + '/' + dt.getDate() + ' ' + h + ':00<br>' + v.toFixed(2) + ' GW unserved'; }});
+    txt(svg, 60, 12, days.length + ' days with a shortfall · ' + hm.total_GWh + ' GWh · peak ' + hm.peak_GW + ' GW', 'dl'); }
+  else { clear('r_hourly').innerHTML = '<p class="sub">No shortfall in ' + nice(state.reg) + ' in ' + Y + '.</p>'; }
+  /* 2 */
+  const capS = ['v6f', 'base', 'severe', 'extreme'];
+  hbars('r_cap', GROUPS, capS.map(k => ({name: NAME[k], color: css(COL[k]), val: g => inv[k].cap[Y][g]})), {rowH: 44, left: 90, unit: 'GW', diverging: false, fmt: v => Math.round(v)});
+  hbars('r_capDelta', GROUPS, CASES.map(([c, n, col]) => ({name: n, color: css(col), val: g => inv[c].cap[Y][g] - inv.v6f.cap[Y][g]})), {rowH: 34, left: 90, unit: 'GW'});
+  hbars('r_genDelta', GROUPS.filter(g => g !== 'Geothermal'), CASES.map(([c, n, col]) => ({name: n, color: css(col), val: g => inv[c].gen[Y][g] - inv.v6f.gen[Y][g]})), {rowH: 34, left: 90, unit: 'TWh'});
+  /* 3 */
+  const costS = ['v6f', 'base', 'severe', 'extreme'];
+  vbars('r_cost', costS, [{name: 'system cost', color: css('--s1'), val: k => inv[k].cost_excl_slack_bEUR}], {H: 280, unit: 'bEUR', fmt: v => Math.round(v), glabel: k => NAME[k], hatch: (k) => inv[k].slack_cost_bEUR});
+  const row = k => '<tr><td>' + NAME[k] + '</td><td class="num">' + Math.round(inv[k].cost_excl_slack_bEUR) + '</td><td class="num">' + (dcost(k) > 0 ? '+' : '') + Math.round(dcost(k)) + '</td><td class="num">' + (dcost(k) > 0 ? '+' : '') + (dcost(k) / inv.v6f.cost_excl_slack_bEUR * 100).toFixed(1) + ' %</td><td class="num">' + (inv[k].slack_PJ_total / 3.6).toFixed(1) + '</td><td class="num">' + Math.round(inv[k].slack_cost_bEUR) + '</td></tr>';
+  document.getElementById('r_costTable').innerHTML = '<div class="tbl" style="margin-top:.6rem"><table><thead><tr><th>case</th><th>system cost bEUR</th><th>vs FEL26 Base</th><th></th><th>unserved TWh 2025–40</th><th>penalty bEUR</th></tr></thead><tbody>' + costS.map(row).join('') + '</tbody></table></div>';
+  /* 4 */
+  const years = [...Array(11).keys()].map(i => 2030 + i); const sl = k => y => inv[k].slack.filter(s => s.year === y).reduce((a, s) => a + s.PJ, 0) / 3.6;
+  vbars('r_nfSlack', years.map(String), CASES.map(([c, n, col]) => ({name: n + ' + cap', color: css(col), val: y => sl(c + '_nf')(+y)})), {H: 250, unit: 'TWh', fmt: v => v >= 10 ? Math.round(v) : v.toFixed(1), m: {l: 48, r: 16, t: 20, b: 30}});
+  hbars('r_nfDelta', GROUPS, [{name: 'Extreme + cap − Extreme', color: css('--s3'), val: g => inv.extreme_nf.cap[Y][g] - inv.extreme.cap[Y][g]}], {rowH: 30, left: 90, unit: 'GW'});
+  const ut = D.util.extreme_nf[Y]; const pools3 = ['PJM', 'SERC', 'MISO'];
+  document.getElementById('r_ceil').innerHTML = pools3.map(p => '<div style="margin:.3rem 0"><span class="lbl" style="font-family:var(--font-mono);font-size:.8rem;color:var(--fg-3)">' + p + '</span><div class="chips">' + Object.keys(ut).map(t => { const v = ut[t][p]; if (v == null) return ''; return '<span class="chip' + (v >= 0.95 ? ' full' : '') + '">' + t + ' ' + Math.round(v * 100) + ' %</span>'; }).join('') + '</div></div>').join('');
+  vbars('r_nfCost', ['v6f', 'base_nf', 'severe_nf', 'extreme_nf'], [{name: 'system cost', color: css('--s1'), val: k => inv[k].cost_excl_slack_bEUR}], {H: 280, unit: 'bEUR', fmt: v => Math.round(v), glabel: k => NAME[k], hatch: (k) => inv[k].slack_cost_bEUR});
+}
+document.querySelectorAll('#ySel button').forEach(b => b.addEventListener('click', () => { state.year = b.dataset.y; render(); }));
+document.querySelectorAll('#r_regSel button').forEach(b => b.addEventListener('click', () => { state.reg = b.dataset.r; render(); }));
+render();
+})();
+<!--/SCRIPT-->

@@ -1,0 +1,208 @@
+<title>Cooling Shape Check</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* layout: one reading column (72ch) with full-width chart figures; charts are inline SVG drawn to scale */
+:root{
+  --bg:#f7f7f4; --surface:#ffffff; --fg:#17201f; --fg-2:#4f5a58; --fg-3:#7d8886; --line:#d9ddd9; --grid:#e9ece9;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s2-fill:rgba(235,104,52,.18); --s3-fill:rgba(27,175,122,.18);
+  --font-body:"IBM Plex Sans",system-ui,"Segoe UI",sans-serif; --font-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#161816; --surface:#1e211f; --fg:#eef0ec; --fg-2:#bfc5c0; --fg-3:#8d948f; --line:#3a403c; --grid:#2b302d;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s2-fill:rgba(217,89,38,.22); --s3-fill:rgba(25,158,112,.22); color-scheme:dark } }
+:root[data-theme="dark"]{ --bg:#161816; --surface:#1e211f; --fg:#eef0ec; --fg-2:#bfc5c0; --fg-3:#8d948f; --line:#3a403c; --grid:#2b302d;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s2-fill:rgba(217,89,38,.22); --s3-fill:rgba(25,158,112,.22); color-scheme:dark }
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.55;margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px}
+main{max-width:980px;margin:0 auto}
+.prose{max-width:72ch}
+h1{font-size:1.9rem;line-height:1.15;font-weight:600;margin:0 0 .4rem;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:1.2rem;font-weight:600;margin:2.4rem 0 .6rem;text-wrap:balance}
+p{margin:.5rem 0}
+.eyebrow{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:.6rem}
+.lede{font-size:1.05rem;color:var(--fg-2)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:1.4rem 0 .4rem}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0}
+.tile .k{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3)}
+.tile .v{font-family:var(--font-mono);font-size:1.7rem;font-weight:500;line-height:1.2;margin:.2rem 0;font-variant-numeric:tabular-nums}
+.tile .v small{font-size:.9rem;color:var(--fg-2);font-weight:400}
+.tile .d{font-size:.85rem;color:var(--fg-2)}
+figure{margin:1rem 0 0;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px 10px;min-width:0}
+figure h3{font-size:1rem;font-weight:600;margin:0 0 .15rem}
+figure .sub{font-size:.85rem;color:var(--fg-2);margin:0 0 .6rem}
+figure svg{width:100%;height:auto;display:block;overflow:visible}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.85rem;color:var(--fg-2);margin:.5rem 0 .2rem}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
+.legend i.fill{height:10px;opacity:.5}
+.axis text,.lbl{font-family:var(--font-mono);font-size:11px;fill:var(--fg-3)}
+.axis line{stroke:var(--grid)}
+.axis .base{stroke:var(--line)}
+.dl{font-family:var(--font-mono);font-size:11px;fill:var(--fg-2)}
+.tip{position:fixed;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:6px 9px;font-size:.8rem;font-family:var(--font-mono);color:var(--fg);box-shadow:0 2px 8px rgba(0,0,0,.12);display:none;z-index:5;white-space:nowrap}
+table{border-collapse:collapse;width:100%;font-size:.88rem;font-variant-numeric:tabular-nums}
+th,td{padding:6px 10px;border-bottom:1px solid var(--grid);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:500;color:var(--fg-2);font-size:.8rem}
+td.num{font-family:var(--font-mono)}
+.tbl{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 8px;margin-top:1rem}
+.tbl h3{font-size:1rem;font-weight:600;margin:.6rem 2px .3rem}
+.hi{color:var(--s2);font-weight:500}
+.lo{color:var(--fg-3)}
+ol li,ul li{margin:.35rem 0}
+.note{font-size:.88rem;color:var(--fg-2);border-left:3px solid var(--line);padding-left:12px;margin:1rem 0}
+code{font-family:var(--font-mono);font-size:.88em}
+@media (max-width:600px){ h1{font-size:1.5rem} figure{padding:10px 10px 6px} }
+</style>
+<main>
+<div class="prose">
+<div class="eyebrow">Climate Base · demand split · checked against 2024 ISO peaks · 2026-10-23</div>
+<h1>What the cooling and heating carve-outs do to the demand peak</h1>
+<p class="lede">The load profile already contains the heating and cooling load. v6 put heating on top of it and ended up winter-peaking in seven of nine pools, which no US ISO is. The cooling split moves the peak back to summer, as it should, but overshoots the measured summer peaks by 6 to 42 %. A residual load shape for Power_General gets both right.</p>
+</div>
+<div class="tiles">
+  <div class="tile"><div class="k">New York 2025 peak, split</div><div class="v">42.2 <small>GW</small></div><div class="d">NYISO 2024: 29.0 GW, scaled to the model's energy 29.8 GW (+42 %)</div></div>
+  <div class="tile"><div class="k">ERCOT 2025 peak, split</div><div class="v">107.7 <small>GW</small></div><div class="d">ERCOT 2024: 85.4 GW, scaled 93.1 GW (+16 %)</div></div>
+  <div class="tile"><div class="k">v6 peak season</div><div class="v">7<small> of 9 pools in winter</small></div><div class="d">ERCOT 94.6 GW in January; its real winter peak is 78 GW</div></div>
+  <div class="tile"><div class="k">Residual shape vs actual</div><div class="v">−4 … +17<small> %</small></div><div class="d">summer-peaking everywhere; New York and PJM still high because the FEL load shape is</div></div>
+</div>
+
+<figure>
+  <h3>New York, hottest week of the weather year, 2025 demand</h3>
+  <p class="sub">Hourly demand in GW, all end uses (155 TWh). Orange: Climate Base as built (general on the load shape, 8 TWh cooling on the cooling shape, 33 TWh heating on the heating shape). Blue: residual shape (general on load minus heating minus cooling; the total follows the measured load shape). Thin green: the heating component, which stays at its summer floor. Shaded: the cooling component.</p>
+  <div class="legend"><span><i style="background:var(--s2)"></i>split (Climate Base as built)</span><span><i style="background:var(--s1)"></i>residual shape</span><span><i style="background:var(--s3)"></i>heating component</span><span><i class="fill" style="background:var(--s2)"></i>cooling component</span></div>
+  <div id="week"></div>
+</figure>
+
+<figure>
+  <h3>New York, coldest week, 2025 demand</h3>
+  <p class="sub">Same series in winter. Cooling is zero, so the split and v6 coincide here: 33 TWh of heating ride on a load shape that already has the winter heating in it. The residual shape keeps the total on the measured load; the v6 total peaks at 29.6 GW in this week, above the split's own winter level and against a measured NYISO winter peak near 24 GW.</p>
+  <div class="legend"><span><i style="background:var(--s2)"></i>v6 = split (identical in winter)</span><span><i style="background:var(--s1)"></i>residual shape</span><span><i style="background:var(--s3)"></i>heating component</span><span><i class="fill" style="background:var(--s3)"></i>heating component (area)</span></div>
+  <div id="coldweek"></div>
+</figure>
+
+<figure>
+  <h3>Shape of the three profiles through the year, New York</h3>
+  <p class="sub">Weekly mean of each normalised profile, 1 = annual mean. Heating and cooling move against each other as expected; cooling is zero for 70 % of the hours (only 14 % of New York's hours exceed 22 °C) and far spikier than heating, whose formula has a 20 % baseline floor.</p>
+  <div class="legend"><span><i style="background:var(--s1)"></i>load shape (TS_LOAD)</span><span><i style="background:var(--s2)"></i>cooling shape</span><span><i style="background:var(--s3)"></i>heating shape</span></div>
+  <div id="weekly"></div>
+</figure>
+
+<figure>
+  <h3>Annual peak 2025 by approach, against the 2024 ISO peak</h3>
+  <p class="sub">GW, all end uses. "ISO 2024, scaled" is the measured 2024 peak scaled to the model's 2025 energy of the pool. v6 peaks fall in winter (hatched label), the others in summer. Values on the bars; the table below has the sources.</p>
+  <div class="legend"><span><i style="background:var(--s1)"></i>ISO 2024, scaled</span><span><i style="background:var(--s4)"></i>v6 (heating carve-out only)</span><span><i style="background:var(--s2)"></i>split (Climate Base as built)</span><span><i style="background:var(--s3)"></i>residual shape</span></div>
+  <div id="bars"></div>
+</figure>
+
+<div class="prose">
+<h2>Checked against the ISOs</h2>
+<p>Every US ISO peaks in summer: ERCOT 85.4 GW on 20 Aug 2024, PJM 152.7 GW and ISO-NE 24.9 GW on 16 Jul 2024, MISO 122 GW on 26 Aug 2024, NYISO 29.0 GW on 8 Jul 2024, SPP 54.4 GW, CAISO 48.4 GW on 5 Sep 2024. Their peak-to-mean ratios lie between 1.62 (MISO) and 1.91 (ISO-NE).</p>
+<p><strong>v6</strong> hits those magnitudes (−13 to +2 %) but in the wrong season: with 776 TWh of heating on its own winter profile on top of a load shape that already contains the heating, seven of nine pools peak in January. ERCOT's v6 winter peak of 94.6 GW compares with a measured 78 GW. That has shaped every v6 fleet so far and is a base defect in its own right.</p>
+<p><strong>The split</strong> fixes the season, as the question suggested, but it adds the same double count in summer. Against the scaled ISO peaks it is +6 % in PJM and MISO, +16 % in ERCOT and SPP, +22 % in New England and +42 % in New York. The cool pools suffer most because their cooling profile (<code>max(T − 22 °C, 0)</code>) is zero for 70 to 75 % of the hours and peaks at 25 to 28 times its mean; 8 TWh of New York cooling become a 22.8 GW spike. Real air-conditioning load peaks at roughly 10 times its mean.</p>
+<p><strong>The residual shape</strong> puts the base-year total on the measured FEL load shape by construction: summer peaks everywhere, −4 % (ERCOT) to +10 % (MISO), with New York (+17 %) and PJM (+13 %) high only because the FEL hourly load itself is spikier than those ISOs' 2024 load. Heating and cooling still get their own profiles, so the 2030/2035 cooling series and the different growth of cooling, heating and general demand act exactly where they should: on top of a correct base-year shape.</p>
+
+<h2>What this means for the climate set</h2>
+<ol>
+  <li><strong>Residual load shape for Power_General (recommended).</strong> Derived <code>TS_POWER_GENERAL</code> = load shape minus the 2025 heating and cooling components, clipped at zero (8 to 42 hours per pool) and renormalised; bound through the existing Par_TagFuelToTimeseries. Data-only. Climate Base then also loses the v6 winter double count, so it differs from v6f in winter as well; that is a correction, and it has to be said in the write-up.</li>
+  <li><strong>Keep the split.</strong> Right season, but the summer peaks sit 16 % (ERCOT) to 42 % (New York) above the measured ones, exactly where the thermal stress bites, and the fleet is sized against them.</li>
+  <li><strong>Soften the cooling formula</strong> (threshold 18.3 °C or a baseline floor) keeps the double count and only trims the cool pools.</li>
+</ol>
+<p>Canada is handled the same way under option 1 (its cooling returns to Power_Buildings_Cooling on a residual general shape); no model code changes in any option.</p>
+</div>
+
+<div class="tbl">
+<h3>Benchmark: measured 2024 ISO peaks against the model's 2025 peak by approach</h3>
+<table>
+<thead><tr><th>Pool</th><th>ISO</th><th>2024 peak GW</th><th>2024 energy TWh (≈)</th><th>peak / mean</th><th>model 2025 TWh</th><th>ISO scaled GW</th><th>v6 GW</th><th>split GW</th><th>residual GW</th><th>v6 dev.</th><th>split dev.</th><th>residual dev.</th></tr></thead>
+<tbody id="benchtbl"></tbody>
+</table>
+</div>
+
+<div class="tbl">
+<h3>Profile peakiness by region (peak hour / annual mean of the normalised profile)</h3>
+<table>
+<thead><tr><th>Region</th><th>cooling</th><th>hours with cooling</th><th>heating</th><th>load</th></tr></thead>
+<tbody id="peaktbl"></tbody>
+</table>
+</div>
+<p class="note">Model: TS_LOAD (FEL 2026 hourly pool load), TS_POWER_BUILDINGS_COOLING / _HEAT (tools-repository formulas on 2018 temperatures) and the Climate Base 2025 demand overlay; data centres and hydrogen flat, BEVs on the load shape. ISO peaks: ERCOT yearly peak archive (85,425 MW, 20 Aug 2024; winter 78,314 MW), PJM 2024 year in review (152,666 MW), ISO-NE 2024 annual markets report (24,871 MW), Potomac Economics MISO 2024 state of the market (122 GW), SPP December 2024 stakeholder report (54,393 MW), NYISO summer 2024 hot-weather report (28,990 MW), CAISO via RTO Insider (48,353 MW). 2024 energies are approximations derived from FERC's 2025 State of the Markets average loads and growth rates; the CAISO footprint covers about 80 % of the model's California region. "Scaled" = ISO peak × model energy / ISO energy.</p>
+</main>
+<div class="tip" id="tip"></div>
+<script>
+const D = DATA_JSON;
+const tip = document.getElementById('tip');
+function showTip(html, ev){ tip.innerHTML = html; tip.style.display='block'; const x = Math.min(ev.clientX+14, window.innerWidth-tip.offsetWidth-8); tip.style.left = x+'px'; tip.style.top = (ev.clientY+14)+'px'; }
+function hideTip(){ tip.style.display='none'; }
+const NS='http://www.w3.org/2000/svg';
+function el(n, a, parent){ const e=document.createElementNS(NS,n); for(const k in a) e.setAttribute(k,a[k]); if(parent) parent.appendChild(e); return e; }
+function niceTicks(max, n){ const raw=max/n, p=Math.pow(10,Math.floor(Math.log10(raw))), f=raw/p, step=(f<1.5?1:f<3?2:f<7?5:10)*p; const t=[]; for(let v=0; v<=max+1e-9; v+=step) t.push(+v.toFixed(6)); return t; }
+function frame(W,H){ return el('svg',{viewBox:'0 0 '+W+' '+H,role:'img'}); }
+function yAxis(svg, ticks, y, m, W, unit){ const g=el('g',{class:'axis'},svg); ticks.forEach(t=>{ el('line',{x1:m.l,x2:W-m.r,y1:y(t),y2:y(t)},g); const tx=el('text',{x:m.l-6,y:y(t)+4,'text-anchor':'end'},g); tx.textContent=t; }); if(unit){ const u=el('text',{x:m.l-6,y:m.t-8,'text-anchor':'end'},g); u.textContent=unit; } }
+function pathOf(arr,x,y){ return arr.map((v,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(v).toFixed(1)).join(' '); }
+const mx=a=>Math.max.apply(null,a);
+
+function weekChart(id, w, fillKey, fillVar, series, labels){
+  const n=w.split.length, W=900,H=330,m={l:44,r:16,t:16,b:34};
+  const svg=frame(W,H); document.getElementById(id).appendChild(svg);
+  const ymax=Math.max(mx(w.split),mx(w.v6),mx(w.residual))*1.1; const x=i=>m.l+(W-m.l-m.r)*i/(n-1), y=v=>H-m.b-(H-m.t-m.b)*v/ymax;
+  yAxis(svg,niceTicks(ymax,5),y,m,W,'GW');
+  const ax=el('g',{class:'axis'},svg); el('line',{class:'base',x1:m.l,x2:W-m.r,y1:H-m.b,y2:H-m.b},ax);
+  const day0=Math.floor((w.start_hour-1)/24)+1;
+  for(let d=0; d<7; d++){ const t=el('text',{x:x(d*24+12),y:H-m.b+18,'text-anchor':'middle'},ax); t.textContent='day '+(day0+d); }
+  el('path',{d:pathOf(w[fillKey],x,y)+' L'+x(n-1)+' '+y(0)+' L'+x(0)+' '+y(0)+' Z',fill:fillVar,stroke:'none'},svg);
+  series.forEach(s=>el('path',{d:pathOf(w[s[0]],x,y),fill:'none',stroke:s[1],'stroke-width':s[2],'stroke-linejoin':'round'},svg));
+  labels.forEach(l=>{ const arr=w[l[0]]; const i=arr.indexOf(mx(arr)); const t=el('text',{class:'dl',x:x(i)+l[1],y:y(arr[i])+l[2],'text-anchor':l[3]||'start'},svg); t.textContent=arr[i].toFixed(1)+' GW '+l[4]; });
+  const cross=el('line',{x1:0,x2:0,y1:m.t,y2:H-m.b,stroke:'var(--fg-3)','stroke-width':1,'stroke-dasharray':'3 3',visibility:'hidden'},svg);
+  const hit=el('rect',{x:m.l,y:m.t,width:W-m.l-m.r,height:H-m.t-m.b,fill:'transparent'},svg);
+  hit.addEventListener('mousemove',ev=>{ const r=svg.getBoundingClientRect(); const px=(ev.clientX-r.left)*W/r.width; const i=Math.max(0,Math.min(n-1,Math.round((px-m.l)/(W-m.l-m.r)*(n-1)))); cross.setAttribute('x1',x(i)); cross.setAttribute('x2',x(i)); cross.setAttribute('visibility','visible');
+    showTip('hour '+(w.start_hour+i)+'<br>split '+w.split[i].toFixed(1)+' GW<br>v6 '+w.v6[i].toFixed(1)+' GW<br>residual '+w.residual[i].toFixed(1)+' GW<br>heating '+w.heat_gw[i].toFixed(1)+' GW · cooling '+w.cool_gw[i].toFixed(1)+' GW',ev); });
+  hit.addEventListener('mouseleave',()=>{cross.setAttribute('visibility','hidden');hideTip();});
+}
+weekChart('week', D.week, 'cool_gw', 'var(--s2-fill)', [['heat_gw','var(--s3)',1.5],['residual','var(--s1)',2],['split','var(--s2)',2]], [['split',6,-6,'start','split'],['residual',8,16,'start','residual']]);
+weekChart('coldweek', D.coldweek, 'heat_gw', 'var(--s3-fill)', [['heat_gw','var(--s3)',1.5],['residual','var(--s1)',2],['v6','var(--s2)',2]], [['v6',6,-6,'start','v6 = split'],['residual',8,16,'start','residual']]);
+
+/* weekly means */
+(function(){
+  const wk=D.weekly, n=52, W=900,H=260,m={l:44,r:16,t:16,b:34};
+  const svg=frame(W,H); document.getElementById('weekly').appendChild(svg);
+  const ymax=mx(wk.cool)*1.08; const x=i=>m.l+(W-m.l-m.r)*(i+.5)/n, y=v=>H-m.b-(H-m.t-m.b)*v/ymax;
+  yAxis(svg,niceTicks(ymax,5),y,m,W,'× mean');
+  const ax=el('g',{class:'axis'},svg); el('line',{class:'base',x1:m.l,x2:W-m.r,y1:H-m.b,y2:H-m.b},ax);
+  ['Jan','Mar','May','Jul','Sep','Nov'].forEach((mo,k)=>{ const t=el('text',{x:x(k*8.7),y:H-m.b+18,'text-anchor':'middle'},ax); t.textContent=mo; });
+  el('line',{x1:m.l,x2:W-m.r,y1:y(1),y2:y(1),stroke:'var(--fg-3)','stroke-dasharray':'3 3'},svg);
+  el('path',{d:pathOf(wk.load,x,y),fill:'none',stroke:'var(--s1)','stroke-width':2,'stroke-linejoin':'round'},svg);
+  el('path',{d:pathOf(wk.heat,x,y),fill:'none',stroke:'var(--s3)','stroke-width':2,'stroke-linejoin':'round'},svg);
+  el('path',{d:pathOf(wk.cool,x,y),fill:'none',stroke:'var(--s2)','stroke-width':2,'stroke-linejoin':'round'},svg);
+  const ic=wk.cool.indexOf(mx(wk.cool)); const l=el('text',{class:'dl',x:x(ic)+8,y:y(wk.cool[ic])+4},svg); l.textContent='cooling, week '+(ic+1)+': '+wk.cool[ic].toFixed(1)+'× mean';
+  const ih=wk.heat.indexOf(mx(wk.heat)); const lh=el('text',{class:'dl',x:x(ih)+8,y:y(wk.heat[ih])-6},svg); lh.textContent='heating, week '+(ih+1)+': '+wk.heat[ih].toFixed(1)+'× mean';
+  const l2=el('text',{class:'dl',x:x(14),y:y(wk.load[14])+16},svg); l2.textContent='load stays within 0.8–1.3× all year';
+  const cross=el('line',{x1:0,x2:0,y1:m.t,y2:H-m.b,stroke:'var(--fg-3)','stroke-width':1,'stroke-dasharray':'3 3',visibility:'hidden'},svg);
+  const hit=el('rect',{x:m.l,y:m.t,width:W-m.l-m.r,height:H-m.t-m.b,fill:'transparent'},svg);
+  hit.addEventListener('mousemove',ev=>{ const r=svg.getBoundingClientRect(); const px=(ev.clientX-r.left)*W/r.width; const i=Math.max(0,Math.min(n-1,Math.floor((px-m.l)/(W-m.l-m.r)*n))); cross.setAttribute('x1',x(i)); cross.setAttribute('x2',x(i)); cross.setAttribute('visibility','visible');
+    showTip('week '+(i+1)+'<br>load '+wk.load[i].toFixed(2)+'× mean<br>heating '+wk.heat[i].toFixed(2)+'× mean<br>cooling '+wk.cool[i].toFixed(2)+'× mean',ev); });
+  hit.addEventListener('mouseleave',()=>{cross.setAttribute('visibility','hidden');hideTip();});
+})();
+
+/* grouped bars: ISO scaled vs approaches */
+(function(){
+  const pools=D.pools.filter(p=>p.actual); const keys=[['actual_scaled','ISO 2024, scaled','--s1'],['v6','v6','--s4'],['split','split','--s2'],['residual','residual','--s3']];
+  const W=900,H=320,m={l:44,r:16,t:18,b:30}; const svg=frame(W,H); document.getElementById('bars').appendChild(svg);
+  const ymax=mx(pools.map(p=>Math.max(p.split,p.v6,p.residual,p.actual_scaled)))*1.1; const y=v=>H-m.b-(H-m.t-m.b)*v/ymax;
+  yAxis(svg,niceTicks(ymax,5),y,m,W,'GW');
+  const gw=(W-m.l-m.r)/pools.length, bw=(gw-22)/keys.length-2;
+  const ax=el('g',{class:'axis'},svg); el('line',{class:'base',x1:m.l,x2:W-m.r,y1:H-m.b,y2:H-m.b},ax);
+  pools.forEach((p,gi)=>{ const t=el('text',{x:m.l+gw*(gi+.5),y:H-m.b+18,'text-anchor':'middle'},ax); t.textContent=p.region.replace('New','New ');
+    keys.forEach((k,ki)=>{ const v=p[k[0]]; const x0=m.l+gw*gi+11+ki*(bw+2);
+      const rc=el('rect',{x:x0,y:y(v),width:bw,height:Math.max(0,y(0)-y(v)),fill:'var('+k[2]+')'},svg);
+      const lb=el('text',{class:'dl',x:x0+bw/2,y:y(v)-5,'text-anchor':'middle'},svg); lb.textContent=v.toFixed(0)+(k[0]==='v6'&&p.v6_season==='winter'?'*':'');
+      rc.addEventListener('mousemove',ev=>showTip(p.region+' · '+k[1]+'<br>'+v.toFixed(1)+' GW annual peak 2025'+(k[0]==='v6'?' ('+p.v6_season+')':k[0]==='split'?' (summer)':''),ev)); rc.addEventListener('mouseleave',hideTip); });
+  });
+  const fn=el('text',{class:'lbl',x:W-m.r,y:H-2,'text-anchor':'end'},svg); fn.textContent='* v6 peak falls in winter';
+})();
+
+/* tables */
+const dev=v=>(v>0?'+':'')+v+' %';
+document.getElementById('benchtbl').innerHTML = D.pools.filter(p=>p.actual).map(p=>'<tr><td>'+p.region.replace('New','New ')+'</td><td>'+p.actual.iso+'</td><td class="num">'+p.actual.peak.toFixed(1)+'</td><td class="num">'+p.actual.twh+'</td><td class="num">'+p.actual.pm.toFixed(2)+'</td><td class="num">'+p.total_TWh+'</td><td class="num">'+p.actual_scaled.toFixed(1)+'</td><td class="num">'+p.v6.toFixed(1)+(p.v6_season==='winter'?'*':'')+'</td><td class="num">'+p.split.toFixed(1)+'</td><td class="num">'+p.residual.toFixed(1)+'</td><td class="num lo">'+dev(p.dev_v6)+'</td><td class="num '+(Math.abs(p.dev_split)>15?'hi':'')+'">'+dev(p.dev_split)+'</td><td class="num">'+dev(p.dev_residual)+'</td></tr>').join('')+'<tr><td colspan="13" class="lo" style="text-align:left">* winter peak; the measured ISO peaks are all in summer</td></tr>';
+document.getElementById('peaktbl').innerHTML = D.peak.map(p=>'<tr><td>'+p.region.replace('New','New ')+'</td><td class="num '+(p.cool>20?'hi':'')+'">'+p.cool.toFixed(1)+'</td><td class="num">'+Math.round(p.nonzero*100)+' %</td><td class="num">'+p.heat.toFixed(2)+'</td><td class="num">'+p.load.toFixed(2)+'</td></tr>').join('');
+</script>

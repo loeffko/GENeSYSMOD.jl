@@ -1,0 +1,161 @@
+<!--STYLE-->
+.map-wrap{display:grid;grid-template-columns:3fr 2fr;gap:12px;align-items:start}
+@media (max-width:760px){ .map-wrap{grid-template-columns:1fr} }
+.pool{stroke:var(--surface);stroke-width:1.2;cursor:pointer}
+.pool.hit{stroke:var(--s2);stroke-width:2.5}
+.bub{fill:var(--surface);fill-opacity:.85;stroke:var(--fg-2);stroke-width:1.2;pointer-events:none}
+.bub.hit{stroke:var(--s2);stroke-width:2}
+.maplbl{font-family:var(--font-mono);font-size:10px;fill:var(--fg);pointer-events:none}
+.kv{font-size:.86rem;line-height:1.45}
+.kv b{font-weight:600}
+.kv table td{padding:3px 8px;border-bottom:1px solid var(--grid);white-space:nowrap}
+.kv table td:first-child{color:var(--fg-2)}
+#d_reading td{white-space:normal}
+#d_reading td:first-child{white-space:nowrap;vertical-align:top}
+.areaLegend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.78rem;color:var(--fg-2);margin:.3rem 0}
+.areaLegend span{display:inline-flex;align-items:center;gap:5px}
+.areaLegend i{width:11px;height:11px;border-radius:2px;display:inline-block}
+<!--/STYLE-->
+<!--BODY-->
+<div class="prose">
+<div class="eyebrow">Regional deep dive · FEL26 Base fleet under the climate cases · 2026-10-26</div>
+<h1>Where the stress lands, and what a stress week looks like</h1>
+<p class="msg">The thermal derate hits the steam-cycle fleet: nuclear, coal, biomass and gas steam units. Their size and the depth of the derate decide which pools run short. Plant-level coordinates are not in the data set, so the map shows the fleet per pool; the dispatch below follows one pool through the worst week.</p>
+</div>
+
+<figure>
+  <h3>Steam-cycle fleet and thermal stress by pool, <span class="yr"></span> <span class="mini" id="d_sensSel"><button data-s="severe" aria-pressed="false">Severe</button><button data-s="extreme" aria-pressed="true">Extreme</button></span></h3>
+  <p class="sub">Fill: mean summer availability of the steam class (hours 3622–6478). Bubble: steam-cycle capacity of the FEL26 Base fleet in GW. Orange outline: pools with unserved energy in that case and year. Canada carries no stress data. Hover or tap a pool.</p>
+  <div class="map-wrap">
+    <div><div class="ramp"><span>1.00</span><b class="rampCool"></b><span>0.85 summer-mean availability</span></div><div id="d_map"></div></div>
+    <div class="kv" id="d_info"></div>
+  </div>
+</figure>
+
+<figure>
+  <h3>Fleet and stress by pool, <span class="yr"></span></h3>
+  <p class="sub">Steam-cycle capacity of the FEL26 Base fleet, the derate it faces, and the resulting shortfall in the hourly dispatch.</p>
+  <div id="d_table"></div>
+</figure>
+
+<figure>
+  <h3>The worst week in <span class="d_reg">PJM</span>, <span class="yr"></span> <span class="mini" id="d_regSel"><button data-r="PJM" aria-pressed="true">PJM</button><button data-r="NewYork" aria-pressed="false">New York</button></span></h3>
+  <p class="sub">Hourly supply in GW over the seven days around the hour of the largest shortfall. Top: Air temp increase (no derate). Middle: Extreme, same fleet, same week. Bottom: availability of the steam and CCGT classes in that week. The derated steam plants drop out exactly when the evening peak arrives; imports, gas turbines and storage are already at their limits, and the gap becomes unserved energy (hatched).</p>
+  <div class="areaLegend" id="d_legend"></div>
+  <div id="d_week1"></div>
+  <div id="d_week2"></div>
+  <div id="d_cf"></div>
+</figure>
+
+<figure>
+  <h3>Reading the week</h3>
+  <div class="kv" id="d_reading"></div>
+</figure>
+<!--/BODY-->
+<!--SCRIPT-->
+(function(){
+const D = DATA3;
+const state = {year: '2035', sens: 'extreme', reg: 'PJM', sel: 'PJM'};
+const NS = 'http://www.w3.org/2000/svg';
+const tip = document.getElementById('tip');
+function showTip(html, ev){ tip.innerHTML = html; tip.style.display = 'block'; const x = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 8); tip.style.left = x + 'px'; tip.style.top = (ev.clientY + 14) + 'px'; }
+function hideTip(){ tip.style.display = 'none'; }
+function el(n, a, parent){ const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (parent) parent.appendChild(e); return e; }
+function txt(parent, x, y, s, cls, anchor){ const t = el('text', {x, y, class: cls || 'lbl', 'text-anchor': anchor || 'start'}, parent); t.textContent = s; return t; }
+function clear(id){ const d = document.getElementById(id); d.innerHTML = ''; return d; }
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function hex2rgb(h){ h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; }
+function mix(a, b, t){ const A = hex2rgb(a), B = hex2rgb(b); return 'rgb(' + A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',') + ')'; }
+function niceTicks(max, n){ const raw = max / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p, step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; const t = []; for (let v = 0; v <= max + 1e-9; v += step) t.push(+v.toFixed(6)); return t; }
+const nice = r => r.replace('NewYork', 'New York').replace('NewEngland', 'New England');
+document.querySelectorAll('#tab-deep .rampCool').forEach(e => e.style.background = 'linear-gradient(90deg,' + css('--cool-lo') + ',' + css('--cool-hi') + ')');
+const LAYERS = [['Nuclear', '#6250d6', '#9085e9'], ['Coal', '#52514e', '#9a9b94'], ['Biomass', '#008300', '#008300'], ['Gas steam', '#e87ba4', '#d55181'], ['Gas CCGT', '#eb6834', '#d95926'], ['Gas OCGT', '#e34948', '#e66767'], ['Hydro', '#1baf7a', '#199e70'], ['Wind', '#2a78d6', '#3987e5'], ['Solar', '#eda100', '#c98500'], ['Geothermal', '#8a7a3a', '#a8955a'], ['Other', '#b5b8b2', '#6f746f'], ['Storage', '#7d8886', '#8d948f'], ['Import', '#c3c2b7', '#52514e']];
+const dark = () => matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.dataset.theme !== 'light' || document.documentElement.dataset.theme === 'dark';
+const lcol = l => dark() ? l[2] : l[1];
+document.getElementById('d_legend').innerHTML = LAYERS.map(l => '<span><i style="background:' + lcol(l) + '"></i>' + l[0] + '</span>').join('') + '<span><i style="background:repeating-linear-gradient(45deg,var(--s2) 0 2px,transparent 2px 5px);border:1px solid var(--s2)"></i>unserved</span><span><i style="height:2px;background:var(--fg)"></i>demand incl. storage charging and exports</span>';
+
+/* ---- map ---- */
+const proj = (lon, lat) => [(lon + 130) * 7.8, (57 - lat) * 9.5];
+function ring(r){ return r.map((c, i) => (i ? 'L' : 'M') + proj(c[0], c[1]).map(v => v.toFixed(1)).join(' ')).join(' ') + 'Z'; }
+function pathOf(f){ const polys = f.type === 'MultiPolygon' ? f.coords : [f.coords]; return polys.map(p => p.map(ring).join(' ')).join(' '); }
+function centroid(f){ const polys = f.type === 'MultiPolygon' ? f.coords : [f.coords]; let best = null; polys.forEach(p => { const r = p[0]; let a = 0, cx = 0, cy = 0; for (let i = 0; i < r.length - 1; i++) { const w = r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; a += w; cx += (r[i][0] + r[i + 1][0]) * w; cy += (r[i][1] + r[i + 1][1]) * w; } a *= 0.5; if (Math.abs(a) > 1e-9) { const c = [cx / (6 * a), cy / (6 * a)]; if (!best || Math.abs(a) > best[2]) best = [c[0], c[1], Math.abs(a)]; } }); return best ? proj(best[0], best[1]) : [0, 0]; }
+const NUDGE = {PJM: [8, -4], NewYork: [-6, -6], NewEngland: [14, -10], SERC: [0, 6], MISO: [-10, 10], WECC: [0, 10], California: [-8, 0], ERCOT: [0, 0], SPP: [0, 0], Canada: [0, 0]};
+function drawMap(){
+  const Y = state.year, S = state.sens; const P = D.pools[Y];
+  const W = 560, H = 330; const svg = el('svg', {viewBox: '0 0 ' + W + ' ' + H, role: 'img'});
+  const maxGW = Math.max(...Object.values(P).map(p => p.steam_GW));
+  D.geo.forEach(f => { const p = P[f.region]; const v = p ? p[S + '_summer_mean'] : null; const t = v == null ? null : Math.max(0, Math.min(1, (1 - v) / 0.15));
+    const path = el('path', {d: pathOf(f), class: 'pool' + (p && p[S + '_unserved_GWh'] > 0.5 ? ' hit' : ''), fill: t == null || f.region === 'Canada' ? 'var(--grid)' : mix(css('--cool-lo'), css('--cool-hi'), t)}, svg);
+    path.addEventListener('mousemove', ev => { showTip(nice(f.region) + (p ? '<br>steam fleet ' + p.steam_GW + ' GW · summer availability ' + (p[S + '_summer_mean'] * 100).toFixed(0) + ' %<br>unserved ' + p[S + '_unserved_GWh'] + ' GWh in ' + p[S + '_hours'] + ' h' : ''), ev); });
+    path.addEventListener('mouseleave', hideTip); path.addEventListener('click', () => { state.sel = f.region; drawInfo(); });
+  });
+  D.geo.forEach(f => { const p = P[f.region]; if (!p || f.region === 'Canada') return; const c = centroid(f); const n = NUDGE[f.region] || [0, 0]; const r = 4 + 26 * Math.sqrt(p.steam_GW / maxGW);
+    el('circle', {cx: c[0] + n[0], cy: c[1] + n[1], r, class: 'bub' + (p[S + '_unserved_GWh'] > 0.5 ? ' hit' : '')}, svg);
+    txt(svg, c[0] + n[0], c[1] + n[1] + 3, p.steam_GW.toFixed(0), 'maplbl', 'middle'); txt(svg, c[0] + n[0], c[1] + n[1] + r + 11, nice(f.region), 'maplbl', 'middle'); });
+  txt(svg, 8, H - 6, 'bubble = steam-cycle GW (nuclear, coal, biomass, gas steam), FEL26 Base fleet ' + Y, 'lbl');
+  clear('d_map').appendChild(svg);
+}
+function drawInfo(){
+  const Y = state.year, S = state.sens, p = D.pools[Y][state.sel]; const o = state.sens === 'extreme' ? 'severe' : 'extreme';
+  document.getElementById('d_info').innerHTML = '<b>' + nice(state.sel) + ', ' + Y + '</b><table>' + [
+    ['steam-cycle fleet', p.steam_GW + ' GW (nuclear ' + p.nuclear_GW + ', coal ' + p.coal_GW + ')'], ['gas fleet', p.gas_GW + ' GW'],
+    ['summer availability, ' + S, (p[S + '_summer_mean'] * 100).toFixed(1) + ' %'], ['worst hour, ' + S, (p[S + '_min'] * 100).toFixed(0) + ' %'],
+    ['unserved, ' + S, p[S + '_unserved_GWh'] + ' GWh in ' + p[S + '_hours'] + ' h'], ['unserved, ' + o, p[o + '_unserved_GWh'] + ' GWh in ' + p[o + '_hours'] + ' h']].map(r => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('') + '</table>';
+}
+function drawTable(){
+  const Y = state.year, P = D.pools[Y]; const rows = Object.keys(P).filter(r => r !== 'Canada').sort((a, b) => P[b].extreme_unserved_GWh - P[a].extreme_unserved_GWh);
+  document.getElementById('d_table').innerHTML = '<div class="tbl"><table><thead><tr><th>pool</th><th>steam fleet GW</th><th>of which nuclear</th><th>summer availability Severe</th><th>Extreme</th><th>worst hour Extreme</th><th>unserved Severe</th><th>unserved Extreme</th></tr></thead><tbody>' +
+    rows.map(r => { const p = P[r]; return '<tr><td>' + nice(r) + '</td><td class="num">' + p.steam_GW + '</td><td class="num">' + p.nuclear_GW + '</td><td class="num">' + (p.severe_summer_mean * 100).toFixed(1) + ' %</td><td class="num">' + (p.extreme_summer_mean * 100).toFixed(1) + ' %</td><td class="num">' + (p.extreme_min * 100).toFixed(0) + ' %</td><td class="num">' + p.severe_unserved_GWh + ' GWh / ' + p.severe_hours + ' h</td><td class="num' + (p.extreme_unserved_GWh > 0.5 ? ' hi' : '') + '">' + p.extreme_unserved_GWh + ' GWh / ' + p.extreme_hours + ' h</td></tr>'; }).join('') + '</tbody></table></div>';
+}
+/* ---- stacked week ---- */
+function stacked(id, w, rec, title, ymax){
+  const n = 168, W = 900, H = 300, m = {l: 48, r: 16, t: 24, b: 28};
+  const x = i => m.l + (W - m.l - m.r) * i / (n - 1), y = v => H - m.b - (H - m.t - m.b) * v / ymax;
+  const svg = el('svg', {viewBox: '0 0 ' + W + ' ' + H, role: 'img'});
+  const defs = el('defs', {}, svg); const pat = el('pattern', {id: 'hatch2', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)'}, defs); el('rect', {width: 6, height: 6, fill: 'var(--surface)'}, pat); el('line', {x1: 0, y1: 0, x2: 0, y2: 6, stroke: 'var(--s2)', 'stroke-width': 2.5}, pat);
+  const ax = el('g', {class: 'axis'}, svg); niceTicks(ymax, 4).forEach(t => { el('line', {x1: m.l, x2: W - m.r, y1: y(t), y2: y(t)}, ax); txt(ax, m.l - 6, y(t) + 4, t, 'lbl', 'end'); }); txt(ax, m.l - 6, m.t - 8, 'GW', 'lbl', 'end');
+  const d0 = Math.floor((w.start_hour - 1) / 24); for (let d = 0; d < 7; d++) { const dt = new Date(2015, 0, 1 + d0 + d); txt(ax, x(d * 24 + 12), H - m.b + 16, (dt.getMonth() + 1) + '/' + dt.getDate(), 'lbl', 'middle'); el('line', {x1: x(d * 24), x2: x(d * 24), y1: m.t, y2: H - m.b, stroke: 'var(--grid)'}, ax); }
+  txt(svg, m.l + 4, m.t - 8, title, 'dl');
+  const base = new Array(n).fill(0); const series = [];
+  LAYERS.forEach(l => { let vals; if (l[0] === 'Storage') vals = rec.storage_net.map(v => Math.max(0, v)); else if (l[0] === 'Import') vals = rec.import.map(v => Math.max(0, v)); else vals = rec.gen[l[0]] || null; if (!vals || vals.every(v => v <= 0.001)) return; series.push([l[0], lcol(l), vals]); });
+  series.push(['unserved', 'url(#hatch2)', rec.unserved]);
+  const tops = [];
+  series.forEach(([name, col, vals]) => { const top = vals.map((v, i) => base[i] + v); const d = top.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ') + ' ' + base.map((v, i) => 'L' + x(n - 1 - i).toFixed(1) + ' ' + y(base[n - 1 - i]).toFixed(1)).join(' ') + 'Z';
+    const p = el('path', {d, fill: col, stroke: name === 'unserved' ? 'var(--s2)' : 'none', 'stroke-width': 1}, svg); tops.push([name, vals, top]); for (let i = 0; i < n; i++) base[i] = top[i]; });
+  el('path', {d: base.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' '), fill: 'none', stroke: 'var(--fg)', 'stroke-width': 1.5}, svg);
+  const cross = el('line', {x1: 0, x2: 0, y1: m.t, y2: H - m.b, stroke: 'var(--fg-3)', 'stroke-dasharray': '3 3', visibility: 'hidden'}, svg);
+  const hit = el('rect', {x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: 'transparent'}, svg);
+  hit.addEventListener('mousemove', ev => { const r = svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * W / r.width; const i = Math.max(0, Math.min(n - 1, Math.round((px - m.l) / (W - m.l - m.r) * (n - 1)))); cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+    showTip('hour ' + (w.start_hour + i) + ' (' + ((w.start_hour + i - 1) % 24) + ':00)<br>' + tops.filter(t => t[1][i] > 0.05).map(t => t[0] + ' ' + t[1][i].toFixed(1) + ' GW').join('<br>') + '<br>total ' + base[i].toFixed(1) + ' GW', ev); });
+  hit.addEventListener('mouseleave', () => { cross.setAttribute('visibility', 'hidden'); hideTip(); });
+  clear(id).appendChild(svg);
+}
+function cfChart(id, w){
+  const n = 168, W = 900, H = 150, m = {l: 48, r: 16, t: 18, b: 26}; const x = i => m.l + (W - m.l - m.r) * i / (n - 1), y = v => H - m.b - (H - m.t - m.b) * (v - 0.5) / 0.5;
+  const svg = el('svg', {viewBox: '0 0 ' + W + ' ' + H, role: 'img'}); const ax = el('g', {class: 'axis'}, svg); [0.5, 0.75, 1].forEach(t => { el('line', {x1: m.l, x2: W - m.r, y1: y(t), y2: y(t)}, ax); txt(ax, m.l - 6, y(t) + 4, t.toFixed(2), 'lbl', 'end'); }); txt(svg, m.l + 4, m.t - 6, 'availability of the steam class (violet) and CCGT class (orange), Extreme', 'dl');
+  for (let d = 0; d < 7; d++) el('line', {x1: x(d * 24), x2: x(d * 24), y1: m.t, y2: H - m.b, stroke: 'var(--grid)'}, ax);
+  [[w.cf_steam, lcol(LAYERS[0])], [w.cf_ccgt, lcol(LAYERS[4])]].forEach(([vals, col]) => el('path', {d: vals.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' '), fill: 'none', stroke: col, 'stroke-width': 2}, svg));
+  const i = w.cf_steam.indexOf(Math.min(...w.cf_steam)); txt(svg, x(i) + 6, y(w.cf_steam[i]) + 12, 'steam class ' + (w.cf_steam[i] * 100).toFixed(0) + ' %', 'dl');
+  clear(id).appendChild(svg);
+}
+function drawWeek(){
+  const key = state.reg + '|' + state.year; const w = D.week[key];
+  document.querySelectorAll('#d_regSel button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.r === state.reg))); document.querySelectorAll('.d_reg').forEach(e => e.textContent = nice(state.reg));
+  if (!w) { ['d_week1', 'd_week2', 'd_cf'].forEach(clear); document.getElementById('d_week1').innerHTML = '<p class="sub">No shortfall in ' + nice(state.reg) + ' in ' + state.year + ' under the Extreme case.</p>'; document.getElementById('d_reading').innerHTML = ''; return; }
+  const tot = rec => rec.demand.map((v, i) => Math.max(v, Object.values(rec.gen).reduce((a, s) => a + s[i], 0) + Math.max(0, rec.storage_net[i]) + Math.max(0, rec.import[i]) + rec.unserved[i])); const ymax = Math.max(...tot(w.extreme), ...tot(w.airtemp)) * 1.08;
+  stacked('d_week1', w, w.airtemp, 'Air temp increase · ' + nice(state.reg) + ' ' + state.year, ymax); stacked('d_week2', w, w.extreme, 'Extreme · same fleet, same week', ymax); cfChart('d_cf', w);
+  const sum = a => a.reduce((x, y) => x + y, 0); const g = k => sum(w.extreme.gen[k] || []) - sum(w.airtemp.gen[k] || []);
+  const peakI = w.peak_hour - w.start_hour; const e = w.extreme, a = w.airtemp;
+  document.getElementById('d_reading').innerHTML = '<table>' + [
+    ['week total, Air temp increase vs Extreme', 'nuclear ' + (g('Nuclear') / 1).toFixed(0) + ' GWh, coal ' + g('Coal').toFixed(0) + ' GWh, gas steam ' + g('Gas steam').toFixed(0) + ' GWh lost; gas CCGT ' + (g('Gas CCGT') >= 0 ? '+' : '') + g('Gas CCGT').toFixed(0) + ' GWh, gas OCGT ' + (g('Gas OCGT') >= 0 ? '+' : '') + g('Gas OCGT').toFixed(0) + ' GWh, imports ' + ((sum(e.import) - sum(a.import)) >= 0 ? '+' : '') + (sum(e.import) - sum(a.import)).toFixed(0) + ' GWh'],
+    ['unserved in the week', sum(e.unserved).toFixed(0) + ' GWh in ' + e.unserved.filter(v => v > 0.05).length + ' hours (Air temp increase: ' + sum(a.unserved).toFixed(0) + ' GWh)'],
+    ['hour of the largest shortfall', 'hour ' + w.peak_hour + ' (' + ((w.peak_hour - 1) % 24) + ':00): demand ' + e.demand[peakI].toFixed(0) + ' GW, unserved ' + e.unserved[peakI].toFixed(1) + ' GW, steam-class availability ' + (w.cf_steam[peakI] * 100).toFixed(0) + ' %, nuclear output ' + ((e.gen.Nuclear || [0])[peakI]).toFixed(1) + ' GW vs ' + ((a.gen.Nuclear || [0])[peakI]).toFixed(1) + ' GW without the derate']
+  ].map(r => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('') + '</table>';
+}
+function render(){ const Y = state.year; document.querySelectorAll('#tab-deep .yr').forEach(e => e.textContent = Y); document.querySelectorAll('#d_sensSel button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.s === state.sens))); drawMap(); drawInfo(); drawTable(); drawWeek(); }
+document.querySelectorAll('#ySel button').forEach(b => b.addEventListener('click', () => { state.year = b.dataset.y; render(); }));
+document.querySelectorAll('#d_sensSel button').forEach(b => b.addEventListener('click', () => { state.sens = b.dataset.s; render(); }));
+document.querySelectorAll('#d_regSel button').forEach(b => b.addEventListener('click', () => { state.reg = b.dataset.r; drawWeek(); }));
+render();
+})();
+<!--/SCRIPT-->
