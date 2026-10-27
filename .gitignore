@@ -19,3 +19,7 @@ iis.txt
 *.prm
 *.lock
 *.duckdb
+# run artefacts and local scratch (2026-10-27 clean-up)
+Results/
+Manifest.toml
+__pycache__/
